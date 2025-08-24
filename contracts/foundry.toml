@@ -1,4 +1,5 @@
 [profile.default]
+script_execution_protection = false
 src = "src"
 out = "out"
 libs = ["lib"]
@@ -34,19 +35,23 @@ monad_testnet = "https://testnet-rpc.monad.xyz"
 [profile.chains]
 monad_testnet = { chain_id = 10143, gas_limit = 30000000 }
 
-# Deployment profiles
+# Deployment profile (for broadcast)
 [profile.deploy]
 gas_limit = 30000000
 gas_price = 1000000000  # 1 gwei
 
-# Cache settings (put OUTSIDE etherscan)
+# Cache settings
 cache = true
 cache_path = "cache"
 
-# Fork settings for testing
-[profile.fork]
+# (Optional) Fork settings for local testing
+# Only uncomment if you actually want to fork!
+# [profile.fork]
 # url = "https://testnet-rpc.monad.xyz"
 # block_number = "latest"
+
+
+
 
 # Coverage settings
 [profile.coverage]
