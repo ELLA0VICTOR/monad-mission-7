@@ -1,0 +1,9 @@
+<!-- frontend/favicon.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="10" fill="#081024"></rect>
+  <g transform="translate(8,8)">
+    <rect x="0" y="0" width="48" height="48" rx="8" fill="#07182a"></rect>
+    <path d="M8 36 L20 12 L32 36 L24 36 L20 24 L16 36 Z" fill="#00ff88"></path>
+    <circle cx="36" cy="12" r="6" fill="#00ff88" opacity="0.9"></circle>
+  </g>
+</svg>

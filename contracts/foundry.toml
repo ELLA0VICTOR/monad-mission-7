@@ -1,0 +1,53 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+remappings = [
+    "forge-std/=lib/forge-std/src/",
+    "ds-test/=lib/forge-std/lib/ds-test/src/",
+]
+
+# Solc version
+solc_version = "0.8.19"
+
+# Optimizer settings
+optimizer = true
+optimizer_runs = 1000000
+
+# EVM version
+evm_version = "paris"
+
+# Test settings
+verbosity = 2
+gas_reports = ["*"]
+
+# Compiler settings
+via_ir = false
+bytecode_hash = "ipfs"
+sparse_mode = false
+
+# Monad Testnet RPC configuration
+[rpc_endpoints]
+monad_testnet = "https://testnet-rpc.monad.xyz"
+
+# Chain configurations
+[chains]
+monad_testnet = { chain_id = 10143, gas_limit = 30000000 }
+
+# Deployment profiles
+[profile.deploy]
+gas_limit = 30000000
+gas_price = 1000000000  # 1 gwei
+
+# Cache settings (put OUTSIDE etherscan)
+cache = true
+cache_path = "cache"
+
+# Fork settings for testing
+[fork]
+# url = "https://testnet-rpc.monad.xyz"
+# block_number = "latest"
+
+# Coverage settings
+[coverage]
+exclude = ["test/**/*", "script/**/*"]
