@@ -31,7 +31,7 @@ sparse_mode = false
 monad_testnet = "https://testnet-rpc.monad.xyz"
 
 # Chain configurations
-[chains]
+[profile.chains]
 monad_testnet = { chain_id = 10143, gas_limit = 30000000 }
 
 # Deployment profiles
@@ -44,10 +44,10 @@ cache = true
 cache_path = "cache"
 
 # Fork settings for testing
-[fork]
+[profile.fork]
 # url = "https://testnet-rpc.monad.xyz"
 # block_number = "latest"
 
 # Coverage settings
-[coverage]
+[profile.coverage]
 exclude = ["test/**/*", "script/**/*"]

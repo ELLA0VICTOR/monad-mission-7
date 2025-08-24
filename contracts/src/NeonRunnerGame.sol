@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/console.sol";
+import "./Leaderboard.sol"; // ADD THIS IMPORT
 
 /**
  * @title NeonRunnerGame
@@ -51,6 +52,8 @@ contract NeonRunnerGame {
     uint256 public totalGamesPlayed;
     uint256 public constant MAX_SCORE = 1000000; // Maximum possible score to prevent exploits
     uint256 public constant MIN_SESSION_TIME = 10; // Minimum session time in seconds
+    
+    Leaderboard public leaderboard; // ADD THIS STATE VARIABLE
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can call this function");
@@ -66,6 +69,11 @@ contract NeonRunnerGame {
         owner = msg.sender;
         gameActive = true;
         console.log("NeonRunnerGame deployed by:", msg.sender);
+    }
+
+    // ADD THIS FUNCTION TO SET LEADERBOARD
+    function setLeaderboard(address _leaderboard) external onlyOwner {
+        leaderboard = Leaderboard(_leaderboard);
     }
 
     /**
@@ -103,6 +111,15 @@ contract NeonRunnerGame {
             stats.highScore = _score;
             isHighScore = true;
             emit HighScoreAchieved(msg.sender, _score);
+            
+            // UPDATE LEADERBOARD when player achieves new high score
+            if (address(leaderboard) != address(0)) {
+                string memory username = stats.username;
+                if (bytes(username).length == 0) {
+                    username = "Anonymous";
+                }
+                leaderboard.updateScore(msg.sender, username, _score);
+            }
         }
 
         // Create game session record
@@ -136,7 +153,6 @@ contract NeonRunnerGame {
 
         console.log("Score submitted by:", msg.sender, "Score:", _score);
     }
-
     /**
      * @dev Set player username
      */

@@ -106,7 +106,10 @@ contract PowerupNFT {
         emit Transfer(address(0), msg.sender, tokenId);
         emit PowerupMinted(msg.sender, tokenId, _powerupType);
         
-        console.log("Powerup minted - Type:", _powerupType, "Token ID:", tokenId, "Owner:", msg.sender);
+        // Fixed console.log - split into multiple calls
+        console.log("Powerup minted - Type:", _powerupType);
+        console.log("Token ID:", tokenId);
+        console.log("Owner:", msg.sender);
         
         // Refund excess payment
         if (msg.value > powerupPrices[_powerupType]) {
@@ -126,7 +129,8 @@ contract PowerupNFT {
         
         emit PowerupUsed(tokenId, msg.sender);
         
-        console.log("Powerup used - Token ID:", tokenId, "User:", msg.sender);
+        console.log("Powerup used - Token ID:", tokenId);
+        console.log("User:", msg.sender);
     }
 
     /**
@@ -173,7 +177,7 @@ contract PowerupNFT {
         bool used,
         uint256 mintTimestamp,
         uint256 useTimestamp,
-        string memory name,
+        string memory powerupName,  // Changed from 'name' to 'powerupName' to avoid shadowing
         string memory description
     ) {
         Powerup memory powerup = powerups[tokenId];
