@@ -1,6 +1,6 @@
 import { defineChain } from 'viem'
 
-// Monad Testnet configuration
+
 export const monadTestnet = defineChain({
   id: 10143,
   name: 'Monad Testnet',
@@ -25,7 +25,7 @@ export const monadTestnet = defineChain({
   },
 })
 
-// Game constants
+
 export const GAME_CONFIG = {
   CANVAS_WIDTH: 800,
   CANVAS_HEIGHT: 400,
@@ -37,7 +37,7 @@ export const GAME_CONFIG = {
   FPS: 60,
 }
 
-// Player states
+
 export const PLAYER_STATES = {
   RUNNING: 'running',
   JUMPING: 'jumping',
@@ -45,16 +45,19 @@ export const PLAYER_STATES = {
   DEAD: 'dead',
 }
 
-// Game objects
+
 export const OBSTACLE_TYPES = {
-  SPIKE: { width: 30, height: 40, damage: 1, sprite: 'spike' },
-  WALL: { width: 20, height: 60, damage: 1, sprite: 'wall' },
-  LASER: { width: 50, height: 10, damage: 2, sprite: 'laser' },
-  DRONE: { width: 40, height: 30, damage: 1, sprite: 'drone' },
+  BASIC_OBSTACLE: {
+    width: 48,
+    height: 48,
+    damage: 1,
+    sprite: 'OBSTACLE' 
+  }
 }
 
+
 export const POWERUP_TYPES = {
-  SPEED_BOOST: { 
+  SPEED: { 
     width: 25, 
     height: 25, 
     duration: 5000, 
@@ -78,7 +81,7 @@ export const POWERUP_TYPES = {
     sprite: 'double_jump',
     color: '#ff8800',
   },
-  SCORE_MULTIPLIER: { 
+  MULTIPLIER: { 
     width: 25, 
     height: 25, 
     duration: 8000, 
@@ -88,7 +91,7 @@ export const POWERUP_TYPES = {
   },
 }
 
-// Scoring system
+
 export const SCORING = {
   BASE_SCORE_PER_SECOND: 10,
   OBSTACLE_DODGE: 25,
@@ -97,17 +100,16 @@ export const SCORING = {
   SURVIVAL_BONUS: 100,
 }
 
-// Leaderboard
+
 export const LEADERBOARD_SIZE = 50
 
-// Contract addresses (will be updated after deployment)
 export const CONTRACT_ADDRESSES = {
-  NEON_RUNNER_GAME: '0x0000000000000000000000000000000000000000',
-  POWERUP_NFT: '0x0000000000000000000000000000000000000000',
-  LEADERBOARD: '0x0000000000000000000000000000000000000000',
+  NEON_RUNNER_GAME: '0x4FfD2c9EEB93D633d217B945C7Baf66a35aB6343',
+  POWERUP_NFT: '0xce9cabB33C17495c7F93C69A4c7AaAF20fa1A5C0',
+  LEADERBOARD: '0x1f5AAa6141eacF3600dA4D39089Bf3ceDE144c25',
 }
 
-// Game phases
+
 export const GAME_PHASES = {
   PHASE_1: { minScore: 0, obstacleFreq: 0.02, powerupFreq: 0.008 },
   PHASE_2: { minScore: 500, obstacleFreq: 0.025, powerupFreq: 0.01 },
@@ -116,19 +118,19 @@ export const GAME_PHASES = {
   PHASE_5: { minScore: 5000, obstacleFreq: 0.04, powerupFreq: 0.018 },
 }
 
-// Sprite configurations
+
 export const SPRITES = {
   RUNNER: {
     width: 32,
     height: 48,
     frames: 6,
     animSpeed: 8,
-    src: '/sprites/runner.png'
+    src: '/sprites/runner.PNG'
   },
-  OBSTACLES: {
-    width: 400,
-    height: 200,
-    src: '/sprites/obstacles.png'
+  OBSTACLE: {
+    width: 48,
+    height: 48,
+    src: '/sprites/obstacle.png'  
   },
   POWERUPS: {
     width: 300,

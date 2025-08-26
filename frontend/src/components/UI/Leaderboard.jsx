@@ -21,9 +21,9 @@ const Leaderboard = () => {
   } = useLeaderboard()
 
   const { isConnected, user } = useMonadGames()
-  const [selectedTab, setSelectedTab] = useState('all') // all, top10, stats
+  const [selectedTab, setSelectedTab] = useState('all') 
 
-  // Update current user highlighting when user connects
+  /
   useEffect(() => {
     if (isConnected && user.address) {
       updateCurrentUser(user.address)
@@ -54,14 +54,14 @@ const Leaderboard = () => {
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          {/* Rank */}
+          
           <div className="flex items-center justify-center w-12 h-12 bg-gray-900 rounded-lg border border-gray-700">
             <span className={`text-lg font-bold ${getRankColor(entry.rank)}`}>
               {formatRank(entry.rank)}
             </span>
           </div>
 
-          {/* Player Info */}
+          
           <div>
             <div className={`font-semibold ${entry.isCurrentUser ? 'text-green-400' : 'text-white'}`}>
               {entry.username}
@@ -77,7 +77,7 @@ const Leaderboard = () => {
           </div>
         </div>
 
-        {/* Score and Date */}
+        
         <div className="text-right">
           <div className={`text-xl font-bold ${getScoreColor(entry.score)}`}>
             {entry.formattedScore}
@@ -89,7 +89,7 @@ const Leaderboard = () => {
         </div>
       </div>
 
-      {/* Progress bar for visual score comparison */}
+      
       <div className="mt-3">
         <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
           <motion.div
@@ -112,7 +112,7 @@ const Leaderboard = () => {
 
   const renderStatistics = () => (
     <div className="space-y-6">
-      {/* Overall Stats */}
+      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {scoreStats && (
           <>
@@ -154,7 +154,7 @@ const Leaderboard = () => {
         )}
       </div>
 
-      {/* User Stats (if connected) */}
+      
       {isConnected && userRank && (
         <div className="bg-green-400/10 border border-green-400/30 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-green-400 mb-4 flex items-center">
@@ -190,7 +190,7 @@ const Leaderboard = () => {
         </div>
       )}
 
-      {/* Score Distribution Chart (simplified) */}
+      
       <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-green-400 mb-4">Score Distribution</h3>
         <div className="space-y-3">
@@ -233,7 +233,7 @@ const Leaderboard = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header */}
+      
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -246,7 +246,7 @@ const Leaderboard = () => {
           Compete with players worldwide on the Monad blockchain
         </p>
 
-        {/* Last Updated */}
+       
         <div className="flex items-center justify-center space-x-4 text-sm text-gray-500">
           <span>
             Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Never'}
@@ -268,7 +268,7 @@ const Leaderboard = () => {
         </div>
       </motion.div>
 
-      {/* Tabs */}
+      
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -296,7 +296,7 @@ const Leaderboard = () => {
         </div>
       </motion.div>
 
-      {/* Content */}
+      
       <AnimatePresence mode="wait">
         {isLoading ? (
           <motion.div
@@ -398,7 +398,7 @@ const Leaderboard = () => {
         )}
       </AnimatePresence>
 
-      {/* Connection prompt */}
+      
       {!isConnected && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}

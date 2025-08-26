@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Pause, RotateCcw, Trophy, Zap } from 'lucide-react'
 import { useGameLogic } from '../../hooks/useGameLogic'
@@ -6,6 +6,7 @@ import { useMonadGames } from '../../hooks/useMonadGames'
 import { GAME_CONFIG } from '../../utils/constants'
 import GameHUD from './GameHUD'
 import GameOver from './GameOver'
+import toast from 'react-hot-toast' 
 
 const GameCanvas = () => {
   const {
@@ -28,14 +29,17 @@ const GameCanvas = () => {
   const [showSubmitScore, setShowSubmitScore] = useState(false)
   const [hasSubmittedScore, setHasSubmittedScore] = useState(false)
 
-  // Handle score submission when game ends
+  
   useEffect(() => {
     if (isGameOver && finalStats && !hasSubmittedScore) {
-      setShowSubmitScore(true)
+      
+      setTimeout(() => {
+        setShowSubmitScore(true)
+      }, 0)
     }
   }, [isGameOver, finalStats, hasSubmittedScore])
 
-  const handleSubmitScore = async () => {
+  const handleSubmitScore = useCallback(async () => {
     if (finalStats && isConnected) {
       const success = await submitGameScore(finalStats)
       if (success) {
@@ -43,13 +47,21 @@ const GameCanvas = () => {
         setShowSubmitScore(false)
       }
     }
-  }
+  }, [finalStats, isConnected, submitGameScore])
 
-  const handleRestartGame = () => {
+  const handleRestartGame = useCallback(() => {
     setHasSubmittedScore(false)
     setShowSubmitScore(false)
     restartGame()
-  }
+  }, [restartGame])
+
+  
+  useEffect(() => {
+    if (isPlaying) {
+      setHasSubmittedScore(false)
+      setShowSubmitScore(false)
+    }
+  }, [isPlaying])
 
   if (isLoading) {
     return (
@@ -74,7 +86,7 @@ const GameCanvas = () => {
 
   return (
     <div className="flex flex-col items-center space-y-6">
-      {/* Game Canvas Container */}
+      
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -91,7 +103,7 @@ const GameCanvas = () => {
           className="game-canvas pixel-art block"
         />
         
-        {/* Game Overlay UI */}
+        
         <AnimatePresence>
           {isMenu && (
             <motion.div
@@ -125,7 +137,13 @@ const GameCanvas = () => {
                 transition={{ delay: 0.4 }}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={startGame}
+                onClick={() => {
+                  if (!isConnected) {
+                    toast.error('Connect wallet to play')
+                    return
+                  }
+                  startGame()
+                }}
                 className="btn-neon text-2xl px-12 py-4 mb-6 animate-pulse-neon"
               >
                 <Play className="inline mr-3" size={24} />
@@ -241,7 +259,7 @@ const GameCanvas = () => {
         </AnimatePresence>
       </motion.div>
 
-      {/* Game HUD */}
+    
       {(isPlaying || isPaused) && (
         <GameHUD 
           gameStats={gameStats}
@@ -251,7 +269,7 @@ const GameCanvas = () => {
         />
       )}
 
-      {/* Game Over Screen */}
+      
       {isGameOver && !showSubmitScore && (
         <GameOver
           finalStats={finalStats}
@@ -262,7 +280,7 @@ const GameCanvas = () => {
         />
       )}
 
-      {/* Game Controls Help */}
+      
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -290,7 +308,7 @@ const GameCanvas = () => {
         </div>
       </motion.div>
 
-      {/* Game Features */}
+      
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

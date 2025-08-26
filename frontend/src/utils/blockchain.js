@@ -1,7 +1,7 @@
 import { createConfig, http } from 'wagmi'
 import { monadTestnet } from './constants'
 
-// Wagmi configuration
+
 export const wagmiConfig = createConfig({
   chains: [monadTestnet],
   transports: {
@@ -9,7 +9,7 @@ export const wagmiConfig = createConfig({
   },
 })
 
-// Contract ABIs
+
 export const NEON_RUNNER_ABI = [
   {
     "inputs": [
@@ -124,7 +124,7 @@ export const LEADERBOARD_ABI = [
   }
 ]
 
-// Utility functions for blockchain interactions
+
 export const formatAddress = (address) => {
   if (!address) return ''
   return `${address.slice(0, 6)}...${address.slice(-4)}`
@@ -142,7 +142,7 @@ export const getExplorerUrl = (hash, type = 'tx') => {
   return `https://testnet.monadexplorer.com/${type}/${hash}`
 }
 
-// Gas estimation helpers
+
 export const GAS_ESTIMATES = {
   SUBMIT_SCORE: 80000n,
   SET_USERNAME: 60000n,
@@ -150,7 +150,7 @@ export const GAS_ESTIMATES = {
   USE_POWERUP: 50000n,
 }
 
-// Transaction helpers
+
 export const buildSubmitScoreParams = (score, distance, powerupsCollected) => {
   return {
     args: [BigInt(score), BigInt(distance), BigInt(powerupsCollected)],

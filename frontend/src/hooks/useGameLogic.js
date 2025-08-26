@@ -13,67 +13,97 @@ export const useGameLogic = () => {
   })
   const [finalStats, setFinalStats] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
-  
+  const [spritesLoaded, setSpritesLoaded] = useState(false) // NEW: track sprite load completion
+
   const gameEngineRef = useRef(null)
   const canvasRef = useRef(null)
 
-  // Initialize game engine
+  // Load sprites once on mount
   useEffect(() => {
-    const initializeGame = async () => {
+    let cancelled = false
+
+    const loadSprites = async () => {
       try {
         setIsLoading(true)
-        
-        // Load all sprites
+        console.log('useGameLogic: Starting sprite load...')
         await spriteManager.loadAllSprites()
-        
-        // Initialize game engine when canvas is ready
-        if (canvasRef.current) {
-          const engine = new GameEngine(canvasRef.current, spriteManager)
-          
-          // Set up callbacks
-          engine.onScoreUpdate = (stats) => {
-            setGameStats(stats)
-          }
-          
-          engine.onGameOver = (stats) => {
-            setGameState('gameOver')
-            setFinalStats(stats)
-            toast.error('Game Over!', {
-              icon: '💀',
-              duration: 3000
-            })
-          }
-          
-          engine.onPowerupCollect = (powerupType) => {
-            toast.success(`${powerupType.replace('_', ' ')} collected!`, {
-              icon: '⚡',
-              duration: 2000
-            })
-          }
-          
-          gameEngineRef.current = engine
-          setGameState('menu')
-        }
+        if (cancelled) return
+        console.log('useGameLogic: Sprites loaded')
+        setSpritesLoaded(true)
       } catch (error) {
-        console.error('Failed to initialize game:', error)
+        console.error('Failed to load sprites:', error)
         toast.error('Failed to load game assets')
       } finally {
+        // We'll keep isLoading true until engine is constructed (see next effect)
         setIsLoading(false)
       }
     }
 
-    initializeGame()
+    loadSprites()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
+  // Create the GameEngine as soon as both sprites are loaded and the canvas is available.
+  useEffect(() => {
+    // If engine already created, nothing to do
+    if (gameEngineRef.current) return
+
+    // Only proceed when both sprites are loaded and canvasRef is available
+    if (spritesLoaded && canvasRef.current) {
+      try {
+        console.log('useGameLogic: Initializing GameEngine...')
+        const engine = new GameEngine(canvasRef.current, spriteManager)
+
+        engine.onScoreUpdate = (stats) => {
+          setGameStats(stats)
+        }
+
+        engine.onGameOver = (stats) => {
+          setGameState('gameOver')
+          setFinalStats(stats)
+          toast.error('Game Over!', {
+            icon: '💀',
+            duration: 3000
+          })
+        }
+
+        engine.onPowerupCollect = (powerupType) => {
+          toast.success(`${powerupType.replace('_', ' ')} collected!`, {
+            icon: '⚡',
+            duration: 2000
+          })
+        }
+
+        gameEngineRef.current = engine
+        setGameState('menu')
+        console.log('useGameLogic: GameEngine initialized successfully')
+      } catch (err) {
+        console.error('Failed to initialize GameEngine:', err)
+        toast.error('Failed to initialize game engine')
+      }
+    }
+  }, [spritesLoaded, canvasRef.current]) // Run when spritesLoaded flips or canvasRef becomes available
+
+  // startGame with a helpful fallback toast/log if engine not ready
   const startGame = useCallback(() => {
     if (gameEngineRef.current) {
-      gameEngineRef.current.start()
-      setGameState('playing')
-      setFinalStats(null)
-      toast.success('Game Started!', {
-        icon: '🚀',
-        duration: 2000
-      })
+      try {
+        gameEngineRef.current.start()
+        setGameState('playing')
+        setFinalStats(null)
+        toast.success('Game Started!', {
+          icon: '🚀',
+          duration: 2000
+        })
+      } catch (err) {
+        console.error('Error when starting game:', err)
+        toast.error('Could not start game — see console for details')
+      }
+    } else {
+      console.warn('Attempted to start game but engine is not initialized yet')
+      toast.error('Game not ready yet. Please wait a moment and try again.', { duration: 3000 })
     }
   }, [])
 
@@ -101,20 +131,33 @@ export const useGameLogic = () => {
 
   const restartGame = useCallback(() => {
     if (gameEngineRef.current) {
-      gameEngineRef.current.reset()
-      gameEngineRef.current.start()
-      setGameState('playing')
-      setFinalStats(null)
-      toast.success('Game Restarted!', {
-        icon: '🔄',
-        duration: 2000
-      })
+      try {
+        gameEngineRef.current.reset()
+        gameEngineRef.current.start()
+        setGameState('playing')
+        setFinalStats(null)
+        toast.success('Game Restarted!', {
+          icon: '🔄',
+          duration: 2000
+        })
+      } catch (err) {
+        console.error('Error when restarting game:', err)
+        toast.error('Could not restart game — see console for details')
+      }
+    } else {
+      toast.error('Game engine not initialized yet.')
     }
   }, [])
 
   const backToMenu = useCallback(() => {
     if (gameEngineRef.current) {
-      gameEngineRef.current.gameState = 'menu'
+      // Prefer calling engine's API if available, otherwise just change state
+      try {
+        gameEngineRef.current.gameState = 'menu'
+      } catch {}
+      setGameState('menu')
+      setFinalStats(null)
+    } else {
       setGameState('menu')
       setFinalStats(null)
     }
@@ -155,11 +198,14 @@ export const useGameLogic = () => {
     return () => window.removeEventListener('keydown', handleKeyPress)
   }, [gameState, pauseGame, resumeGame, restartGame, backToMenu])
 
-  // Cleanup on unmount
+  // Cleanup on unmount (ensure engine stopped)
   useEffect(() => {
     return () => {
       if (gameEngineRef.current) {
-        gameEngineRef.current.gameState = 'stopped'
+        try {
+          gameEngineRef.current.destroy()
+          gameEngineRef.current = null
+        } catch {}
       }
     }
   }, [])

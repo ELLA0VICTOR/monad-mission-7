@@ -47,7 +47,7 @@ const WalletConnect = ({ className = '' }) => {
         )}
       </motion.button>
 
-      {/* Info tooltip */}
+      
       <div className="relative group">
         <AlertCircle size={16} className="text-gray-400 cursor-help" />
         

@@ -44,9 +44,6 @@ contract Deploy is Script {
         leaderboardContract.setGameContract(address(gameContract));
         console.log("Game contract set in leaderboard");
         
-        // Set test usernames and initial data if needed
-        // gameContract.setUsername("TestPlayer1");
-        
         vm.stopBroadcast();
         
         // Log deployment summary
@@ -58,32 +55,14 @@ contract Deploy is Script {
         console.log("Leaderboard:", address(leaderboardContract));
         console.log("========================\n");
         
-        // Save deployment addresses to file
-        _saveDeploymentAddresses(
-            address(gameContract),
-            address(powerupContract),
-            address(leaderboardContract)
-        );
+        // Print addresses for easy copying to frontend
+        console.log("COPY THESE TO YOUR FRONTEND .env:");
+        console.log("VITE_NEON_RUNNER_GAME=%s", vm.toString(address(gameContract)));
+        console.log("VITE_POWERUP_NFT=%s", vm.toString(address(powerupContract)));
+        console.log("VITE_LEADERBOARD=%s", vm.toString(address(leaderboardContract)));
         
         // Verify contracts are working
         _verifyDeployment(gameContract, powerupContract, leaderboardContract);
-    }
-    
-    function _saveDeploymentAddresses(
-        address gameContract,
-        address powerupContract,
-        address leaderboardContract
-    ) internal {
-        string memory addresses = string(abi.encodePacked(
-            "{\n",
-            '  "NEON_RUNNER_GAME": "', vm.toString(gameContract), '",\n',
-            '  "POWERUP_NFT": "', vm.toString(powerupContract), '",\n',
-            '  "LEADERBOARD": "', vm.toString(leaderboardContract), '"\n',
-            "}"
-        ));
-        
-        vm.writeFile("./deployments/monad-testnet.json", addresses);
-        console.log("Deployment addresses saved to ./deployments/monad-testnet.json");
     }
     
     function _verifyDeployment(

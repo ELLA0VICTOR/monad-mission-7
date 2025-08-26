@@ -5,16 +5,31 @@ export default defineConfig({
   plugins: [react()],
   define: {
     global: 'globalThis',
+    'process.env': {}
+  },
+  resolve: {
+    alias: {
+      buffer: 'buffer',
+      util: 'util',
+    }
+  },
+  optimizeDeps: {
+    include: ['buffer', 'util']
   },
   server: {
     port: 3000,
     open: true,
   },
   build: {
-    outDir: 'dist', // now relative to project root
+    outDir: 'dist',
     sourcemap: true,
-  },
-  optimizeDeps: {
-    include: ['react', 'react-dom'],
-  },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          crypto: ['buffer', 'util']
+        }
+      }
+    }
+  }
 })

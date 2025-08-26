@@ -23,7 +23,7 @@ const GameOver = ({
   }
 
   const scoreRating = getScoreRating()
-  const survivalTime = Math.floor(distance / 100) // Approximate survival time in seconds
+  const survivalTime = Math.floor(distance / 100) 
 
   const achievements = []
   if (score >= 1000) achievements.push({ name: 'Score Master', desc: 'Reached 1,000 points', icon: '🎯' })
@@ -41,7 +41,7 @@ const GameOver = ({
         boxShadow: '0 0 50px rgba(255, 68, 68, 0.3)'
       }}
     >
-      {/* Header */}
+      
       <div className="text-center mb-8">
         <motion.div
           initial={{ scale: 0 }}
@@ -71,7 +71,7 @@ const GameOver = ({
         </motion.p>
       </div>
 
-      {/* Score Section */}
+      
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -87,7 +87,7 @@ const GameOver = ({
         </div>
       </motion.div>
 
-      {/* Stats Grid */}
+      
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -131,7 +131,7 @@ const GameOver = ({
         </div>
       </motion.div>
 
-      {/* Achievements */}
+      
       {achievements.length > 0 && (
         <motion.div
           initial={{ y: 20, opacity: 0 }}
@@ -163,7 +163,7 @@ const GameOver = ({
         </motion.div>
       )}
 
-      {/* Player Info */}
+      
       {userInfo.isConnected && (
         <motion.div
           initial={{ y: 20, opacity: 0 }}
@@ -186,7 +186,7 @@ const GameOver = ({
         </motion.div>
       )}
 
-      {/* Action Buttons */}
+      
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -212,7 +212,7 @@ const GameOver = ({
         )}
       </motion.div>
 
-      {/* Tips for improvement */}
+      
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

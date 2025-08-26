@@ -14,16 +14,19 @@ export class GameEngine {
     this.ctx = canvas.getContext('2d')
     this.spriteManager = spriteManager
     
-    // Game state
-    this.gameState = 'menu' // menu, playing, paused, gameOver
+    
+    this.gameState = 'menu' 
     this.score = 0
     this.distance = 0
     this.gameSpeed = 1
     this.frameCount = 0
+    this.isRunning = false
+    this.isPaused = false 
     
-    // Player
+    
     this.player = {
       x: 100,
+      
       y: GAME_CONFIG.CANVAS_HEIGHT - 100,
       width: 32,
       height: 48,
@@ -37,37 +40,38 @@ export class GameEngine {
       maxHealth: 3,
     }
     
-    // Game objects
+    
     this.obstacles = []
     this.powerups = []
     this.activePowerups = []
     
-    // Systems
+    
     this.particleSystem = new ParticleSystem()
     this.backgroundManager = new BackgroundManager(GAME_CONFIG.CANVAS_WIDTH, GAME_CONFIG.CANVAS_HEIGHT)
     
-    // Input handling
+    
     this.keys = {}
     this.setupEventListeners()
     
-    // Game timing
+    
     this.lastFrameTime = 0
     this.deltaTime = 0
+    this.animationFrameId = null 
     
-    // Powerup effects
+    
     this.speedMultiplier = 1
     this.scoreMultiplier = 1
     this.hasShield = false
     this.hasDoubleJump = false
     
-    // Callbacks
+    
     this.onScoreUpdate = null
     this.onGameOver = null
     this.onPowerupCollect = null
   }
 
   setupEventListeners() {
-    // Keyboard events
+    
     document.addEventListener('keydown', (e) => {
       this.keys[e.code] = true
       if (e.code === 'Space' || e.code === 'ArrowUp') {
@@ -83,102 +87,118 @@ export class GameEngine {
       this.keys[e.code] = false
     })
 
-    // Touch/click events for mobile
-    this.canvas.addEventListener('click', (e) => {
-      if (this.gameState === 'playing') {
-        this.jump()
-      }
-    })
+    
+    if (this.canvas) {
+      this.canvas.addEventListener('click', (e) => {
+        if (this.gameState === 'playing' && !this.isPaused) {
+          this.jump()
+        }
+      })
 
-    this.canvas.addEventListener('touchstart', (e) => {
-      e.preventDefault()
-      if (this.gameState === 'playing') {
-        this.jump()
-      }
-    })
+      this.canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault()
+        if (this.gameState === 'playing' && !this.isPaused) {
+          this.jump()
+        }
+      })
+    }
   }
 
   start() {
+    console.log('GameEngine: Starting game')
     this.gameState = 'playing'
+    this.isRunning = true
+    this.isPaused = false
     this.reset()
-    this.gameLoop()
+    this.gameLoop() 
   }
 
   reset() {
-    // Reset game state
+    console.log('GameEngine: Resetting game state')
+    
     this.score = 0
     this.distance = 0
     this.gameSpeed = 1
     this.frameCount = 0
     
-    // Reset player
+    
+    const groundBase = GAME_CONFIG.CANVAS_HEIGHT - 100
     this.player.x = 100
-    this.player.y = GAME_CONFIG.CANVAS_HEIGHT - 100
+    this.player.y = groundBase - this.player.height
     this.player.velocityY = 0
     this.player.onGround = true
     this.player.state = PLAYER_STATES.RUNNING
     this.player.jumpCount = 0
     this.player.health = 3
     
-    // Clear game objects
+    
     this.obstacles = []
     this.powerups = []
     this.activePowerups = []
     
-    // Reset effects
+    
     this.speedMultiplier = 1
     this.scoreMultiplier = 1
     this.hasShield = false
     this.hasDoubleJump = false
     
-    // Clear particles
+    
     this.particleSystem.clear()
   }
 
   gameLoop(currentTime = 0) {
-    if (this.gameState !== 'playing') return
+    
+    if (!this.isRunning || this.gameState === 'gameOver') {
+      return
+    }
 
     this.deltaTime = currentTime - this.lastFrameTime
     this.lastFrameTime = currentTime
 
-    this.update()
+    
+    if (this.gameState === 'playing' && !this.isPaused) {
+      this.update()
+    }
+    
+    
     this.draw()
 
-    requestAnimationFrame((time) => this.gameLoop(time))
+    
+    this.animationFrameId = requestAnimationFrame((time) => this.gameLoop(time))
   }
 
   update() {
     this.frameCount++
     
-    // Update game speed based on score
+    
     this.gameSpeed = 1 + (this.score / 1000) * 0.5
     
-    // Update distance
+   
     this.distance += this.gameSpeed
     
-    // Update score
+   
     this.score += SCORING.BASE_SCORE_PER_SECOND * this.scoreMultiplier * (this.gameSpeed / 60)
     
-    // Update player
+  
     this.updatePlayer()
     
-    // Update game objects
+   
     this.updateObstacles()
     this.updatePowerups()
     this.updateActivePowerups()
     
-    // Spawn new objects
+    
     this.spawnObstacles()
     this.spawnPowerups()
     
-    // Update systems
+    
     this.particleSystem.update()
     this.backgroundManager.update(this.gameSpeed)
     
-    // Check collisions
+    
     this.checkCollisions()
     
-    // Update UI
+    
     if (this.onScoreUpdate) {
       this.onScoreUpdate({
         score: Math.floor(this.score),
@@ -190,21 +210,26 @@ export class GameEngine {
   }
 
   updatePlayer() {
-    // Update sprite animation
-    this.player.sprite.update()
     
-    // Apply gravity
+    try {
+      this.player.sprite.update()
+    } catch (err) {
+      
+    }
+    
+   
     if (!this.player.onGround) {
       this.player.velocityY += GAME_CONFIG.GRAVITY
     }
     
-    // Update position
+    
     this.player.y += this.player.velocityY
     
-    // Ground collision
-    const groundY = GAME_CONFIG.CANVAS_HEIGHT - 100
-    if (this.player.y >= groundY) {
-      this.player.y = groundY
+   
+    const groundBase = GAME_CONFIG.CANVAS_HEIGHT - 100
+    const playerBottom = this.player.y + this.player.height
+    if (playerBottom >= groundBase) {
+      this.player.y = groundBase - this.player.height
       this.player.velocityY = 0
       this.player.onGround = true
       this.player.jumpCount = 0
@@ -214,12 +239,12 @@ export class GameEngine {
       this.player.state = this.player.velocityY < 0 ? PLAYER_STATES.JUMPING : PLAYER_STATES.FALLING
     }
     
-    // Update max jumps based on powerups
+    
     this.player.maxJumps = this.hasDoubleJump ? 2 : 1
   }
 
   jump() {
-    if (this.gameState !== 'playing') return
+    if (this.gameState !== 'playing' || this.isPaused) return
     
     if (this.player.jumpCount < this.player.maxJumps) {
       this.player.velocityY = GAME_CONFIG.JUMP_FORCE
@@ -233,7 +258,7 @@ export class GameEngine {
     this.obstacles = this.obstacles.filter(obstacle => {
       obstacle.x -= GAME_CONFIG.OBSTACLE_SPEED * this.gameSpeed * this.speedMultiplier
       
-      // Remove off-screen obstacles and award points
+     
       if (obstacle.x + obstacle.width < 0) {
         this.score += SCORING.OBSTACLE_DODGE * this.scoreMultiplier
         return false
@@ -247,7 +272,7 @@ export class GameEngine {
     this.powerups = this.powerups.filter(powerup => {
       powerup.x -= GAME_CONFIG.POWERUP_SPEED * this.gameSpeed
       
-      // Floating animation
+     
       powerup.floatOffset += 0.1
       powerup.y += Math.sin(powerup.floatOffset) * 0.5
       
@@ -271,22 +296,34 @@ export class GameEngine {
   spawnObstacles() {
     const phase = this.getCurrentPhase()
     
+    
+    const base = 1
+    const extra = Math.floor(this.score / 800) 
+    const clusterSize = Math.min(4, base + extra) 
+    const spacing = 60 
+
     if (Math.random() < phase.obstacleFreq) {
       const obstacleTypes = Object.keys(OBSTACLE_TYPES)
-      const type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)]
+      const type = obstacleTypes.length ? obstacleTypes[0] : null
+      if (!type) return
       const config = OBSTACLE_TYPES[type]
-      
-      const obstacle = {
-        x: GAME_CONFIG.CANVAS_WIDTH,
-        y: GAME_CONFIG.CANVAS_HEIGHT - 100 - config.height,
-        width: config.width,
-        height: config.height,
-        type,
-        damage: config.damage,
-        sprite: config.sprite
+
+     
+      for (let i = 0; i < clusterSize; i++) {
+        
+        const yVariance = (Math.random() - 0.5) * 10
+        const obstacle = {
+          x: GAME_CONFIG.CANVAS_WIDTH + i * (config.width + spacing),
+          y: GAME_CONFIG.CANVAS_HEIGHT - 100 - config.height + yVariance,
+          width: config.width,
+          height: config.height,
+          type,
+          damage: config.damage,
+          sprite: config.sprite
+        }
+        
+        this.obstacles.push(obstacle)
       }
-      
-      this.obstacles.push(obstacle)
     }
   }
 
@@ -356,6 +393,7 @@ export class GameEngine {
     if (this.hasShield) {
       // Shield blocks damage
       this.hasShield = false
+      // Safe removal (guarded)
       this.removePowerupEffect('shield')
     } else {
       this.player.health -= obstacle.damage
@@ -387,7 +425,7 @@ export class GameEngine {
   }
 
   applyPowerupEffect(type, config) {
-    // Remove existing powerup of same type
+    
     this.activePowerups = this.activePowerups.filter(p => p.type !== type)
     
     // Add new powerup
@@ -414,7 +452,28 @@ export class GameEngine {
   }
 
   removePowerupEffect(type) {
+   
     const config = POWERUP_TYPES[type]
+    if (!config) {
+      
+      switch (type) {
+        case 'speed':
+          this.speedMultiplier = 1
+          return
+        case 'shield':
+          this.hasShield = false
+          return
+        case 'double_jump':
+          this.hasDoubleJump = false
+          return
+        case 'multiplier':
+          this.scoreMultiplier = 1
+          return
+        default:
+          console.warn('removePowerupEffect: unknown powerup type', type)
+          return
+      }
+    }
     
     switch (config.effect) {
       case 'speed':
@@ -433,21 +492,21 @@ export class GameEngine {
   }
 
   draw() {
-    // Clear canvas
+    
     this.ctx.clearRect(0, 0, GAME_CONFIG.CANVAS_WIDTH, GAME_CONFIG.CANVAS_HEIGHT)
     
-    // Draw background
+   
     this.backgroundManager.draw(this.ctx, this.spriteManager)
     
-    // Draw game objects
+    
     this.drawObstacles()
     this.drawPowerups()
     this.drawPlayer()
     
-    // Draw effects
+   
     this.particleSystem.draw(this.ctx)
     
-    // Draw UI overlay
+    
     this.drawHUD()
   }
 
@@ -469,15 +528,28 @@ export class GameEngine {
       this.ctx.shadowBlur = 15
     }
     
-    // Draw player sprite
-    this.player.sprite.draw(
-      this.ctx,
-      this.player.x,
-      this.player.y,
-      this.player.width,
-      this.player.height,
-      this.spriteManager
-    )
+    // Draw player sprite (fallback to colored rectangle if sprite not available)
+    const playerSprite = this.spriteManager.getSprite && this.spriteManager.getSprite('RUNNER')
+    if (playerSprite && typeof this.player.sprite?.draw === 'function') {
+      try {
+        this.player.sprite.draw(
+          this.ctx,
+          this.player.x,
+          this.player.y,
+          this.player.width,
+          this.player.height,
+          this.spriteManager
+        )
+      } catch (err) {
+        // fallback if sprite drawing fails
+        this.ctx.fillStyle = '#00ff88'
+        this.ctx.fillRect(this.player.x, this.player.y, this.player.width, this.player.height)
+      }
+    } else {
+      // Fallback: draw a colored rectangle
+      this.ctx.fillStyle = '#00ff88'
+      this.ctx.fillRect(this.player.x, this.player.y, this.player.width, this.player.height)
+    }
     
     this.ctx.restore()
   }
@@ -486,16 +558,60 @@ export class GameEngine {
     this.obstacles.forEach(obstacle => {
       this.ctx.save()
       
-      // Draw obstacle with neon glow
-      this.ctx.shadowColor = '#ff4444'
-      this.ctx.shadowBlur = 10
-      this.ctx.fillStyle = '#ff4444'
-      this.ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height)
-      
-      // Draw obstacle border
-      this.ctx.strokeStyle = '#ff8888'
-      this.ctx.lineWidth = 2
-      this.ctx.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height)
+      // Try to draw a sprite if available for this obstacle
+      let drawnBySprite = false
+      try {
+        const spriteKey = obstacle.sprite || obstacle.type
+        const obsSprite = this.spriteManager.getSprite && this.spriteManager.getSprite(spriteKey)
+
+        if (obsSprite) {
+          // If the sprite is an AnimatedSprite-style object with a draw method:
+          if (typeof obsSprite.draw === 'function') {
+            obsSprite.draw(this.ctx, obstacle.x, obstacle.y, obstacle.width, obstacle.height, this.spriteManager)
+            drawnBySprite = true
+          } else {
+            // If it's a plain HTMLImageElement, handle spritesheet vs single image
+            if (obsSprite.width > obsSprite.height) {
+              // Treat as horizontal spritesheet: draw a single frame and animate it
+              const frameCount = Math.max(1, Math.round(obsSprite.width / obsSprite.height))
+              const frameWidth = obsSprite.width / frameCount
+              const animFrame = Math.floor(this.frameCount / 8) % frameCount
+              const sx = animFrame * frameWidth
+
+              this.ctx.drawImage(
+                obsSprite,
+                sx, 0, frameWidth, obsSprite.height,
+                obstacle.x, obstacle.y, obstacle.width, obstacle.height
+              )
+              drawnBySprite = true
+            } else {
+              // Single-image obstacle; draw scaled
+              this.ctx.drawImage(
+                obsSprite,
+                0, 0, obsSprite.width, obsSprite.height,
+                obstacle.x, obstacle.y, obstacle.width, obstacle.height
+              )
+              drawnBySprite = true
+            }
+          }
+        }
+      } catch (err) {
+        // ignore sprite-draw errors and fallback to rectangle
+        console.warn('Obstacle sprite draw failed:', err)
+      }
+
+      if (!drawnBySprite) {
+        // Draw obstacle with neon glow (fallback)
+        this.ctx.shadowColor = '#ff4444'
+        this.ctx.shadowBlur = 10
+        this.ctx.fillStyle = '#ff4444'
+        this.ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height)
+        
+        // Draw obstacle border
+        this.ctx.strokeStyle = '#ff8888'
+        this.ctx.lineWidth = 2
+        this.ctx.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height)
+      }
       
       this.ctx.restore()
     })
@@ -563,16 +679,26 @@ export class GameEngine {
   }
 
   togglePause() {
-    if (this.gameState === 'playing') {
+    this.isPaused = !this.isPaused
+    if (this.isPaused) {
       this.gameState = 'paused'
-    } else if (this.gameState === 'paused') {
+      console.log('GameEngine: Game paused')
+    } else {
       this.gameState = 'playing'
-      this.gameLoop()
+      console.log('GameEngine: Game resumed')
     }
   }
 
   gameOver() {
+    console.log('GameEngine: Game over')
     this.gameState = 'gameOver'
+    this.isRunning = false
+    
+    // Cancel animation frame
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId)
+      this.animationFrameId = null
+    }
     
     if (this.onGameOver) {
       this.onGameOver({
@@ -590,6 +716,14 @@ export class GameEngine {
       gameSpeed: this.gameSpeed,
       health: this.player.health,
       activePowerups: this.activePowerups.length
+    }
+  }
+
+  // Cleanup method
+  destroy() {
+    this.isRunning = false
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId)
     }
   }
 }

@@ -9,7 +9,7 @@ export const useLeaderboard = () => {
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
 
-  // Read leaderboard from contract
+  
   const { 
     data: contractLeaderboard, 
     isLoading: contractLoading, 
@@ -23,14 +23,14 @@ export const useLeaderboard = () => {
     enabled: !!CONTRACT_ADDRESSES.LEADERBOARD && CONTRACT_ADDRESSES.LEADERBOARD !== '0x0000000000000000000000000000000000000000',
   })
 
-  // Process leaderboard data
+  
   useEffect(() => {
     setIsLoading(contractLoading)
     
     if (contractError) {
       console.error('Leaderboard contract error:', contractError)
       setError('Failed to load leaderboard')
-      // Use mock data for development
+      
       setLeaderboardData(getMockLeaderboard())
       setLastUpdated(new Date())
       return
@@ -45,14 +45,14 @@ export const useLeaderboard = () => {
         formattedScore: formatScore(Number(entry.score)),
         timestamp: Number(entry.timestamp),
         date: new Date(Number(entry.timestamp) * 1000).toLocaleDateString(),
-        isCurrentUser: false // Will be updated when user connects
+        isCurrentUser: false 
       }))
       
       setLeaderboardData(processedData)
       setLastUpdated(new Date())
       setError(null)
     } else if (!contractLoading) {
-      // Use mock data if no contract data
+      
       setLeaderboardData(getMockLeaderboard())
       setLastUpdated(new Date())
     }

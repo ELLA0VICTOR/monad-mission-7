@@ -26,9 +26,9 @@ const GameHUD = ({ gameStats, onPause, onRestart, isPaused }) => {
       className="w-full max-w-4xl bg-black/80 border border-green-400/30 rounded-lg p-4 backdrop-blur-sm"
     >
       <div className="flex items-center justify-between">
-        {/* Left Side - Game Stats */}
+        
         <div className="flex items-center space-x-8">
-          {/* Score */}
+          
           <div className="text-center">
             <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">
               Score
@@ -38,7 +38,7 @@ const GameHUD = ({ gameStats, onPause, onRestart, isPaused }) => {
             </div>
           </div>
 
-          {/* Distance */}
+          
           <div className="text-center">
             <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">
               Distance
@@ -48,7 +48,7 @@ const GameHUD = ({ gameStats, onPause, onRestart, isPaused }) => {
             </div>
           </div>
 
-          {/* Speed */}
+          
           <div className="text-center">
             <div className="text-xs text-gray-400 uppercase tracking-wider mb-1 flex items-center">
               <Zap size={12} className="mr-1" />
@@ -60,7 +60,7 @@ const GameHUD = ({ gameStats, onPause, onRestart, isPaused }) => {
           </div>
         </div>
 
-        {/* Center - Health Bar */}
+        
         <div className="flex items-center space-x-3">
           <Heart className={`w-5 h-5 ${getHealthColor()}`} />
           <div className="relative">
@@ -86,7 +86,7 @@ const GameHUD = ({ gameStats, onPause, onRestart, isPaused }) => {
           </div>
         </div>
 
-        {/* Right Side - Controls */}
+        
         <div className="flex items-center space-x-3">
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -109,7 +109,7 @@ const GameHUD = ({ gameStats, onPause, onRestart, isPaused }) => {
         </div>
       </div>
 
-      {/* Progress Indicators */}
+      
       <div className="mt-4 flex items-center justify-between text-xs text-gray-400">
         <div className="flex items-center space-x-4">
           <div className="flex items-center">
@@ -123,7 +123,7 @@ const GameHUD = ({ gameStats, onPause, onRestart, isPaused }) => {
         </div>
       </div>
 
-      {/* Mini Progress Bar for Next Milestone */}
+      
       <div className="mt-2 w-full">
         <div className="w-full h-1 bg-gray-800 rounded-full overflow-hidden">
           <motion.div
