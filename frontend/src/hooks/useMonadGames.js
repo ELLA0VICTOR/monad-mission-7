@@ -1,6 +1,6 @@
 // frontend/src/hooks/useMonadGames.js
 import { useState, useEffect, useCallback } from 'react'
-import { usePrivy } from '@privy-io/react-auth'
+import { usePrivy, useCrossAppAccounts } from '@privy-io/react-auth'
 import { useAccount, useWriteContract, useReadContract } from 'wagmi'
 import toast from 'react-hot-toast'
 import {
@@ -14,7 +14,10 @@ import { MONADGAMES_CONFIG } from '../utils/monadgames-config'
 // Hook that provides connect/disconnect/submit flows for Monad Games + Privy integration
 export const useMonadGames = () => {
   // Privy
-  const { login, logout, authenticated, user: privyUser, getCrossAppAccounts } = usePrivy()
+  const { login, logout, authenticated, user: privyUser } = usePrivy()
+  
+  // THIS IS THE KEY FIX: Use useCrossAppAccounts hook
+  const { loginWithCrossAppAccount, linkCrossAppAccount } = useCrossAppAccounts()
 
   // Wagmi (injected wallet state)
   const { address, isConnected: wagmiIsConnected } = useAccount()
@@ -67,47 +70,33 @@ export const useMonadGames = () => {
     }
   }, [contractUsername])
 
-  // Check for MonadGames cross-app account
+  // FIXED: Check for MonadGames cross-app account properly
   useEffect(() => {
-    if (authenticated && getCrossAppAccounts) {
-      const checkMonadGamesAccount = async () => {
-        try {
-          const crossAppAccounts = getCrossAppAccounts()
-          const monadAccount = (crossAppAccounts || []).find(
-            account => account.providerAppId === MONADGAMES_CONFIG.crossAppId
-          )
-          if (monadAccount) {
-            setMonadGamesUser(monadAccount)
-            console.log('MonadGames account found:', monadAccount)
-          }
-        } catch (error) {
-          console.error('Error checking cross-app accounts:', error)
-        }
-      }
-      checkMonadGamesAccount()
-    }
-  }, [authenticated, getCrossAppAccounts])
-
-  // Detect multiple injected providers and warn the user (common cause of the "ethereum" errors)
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const eth = window.ethereum
-    if (!eth) return
-
-    // Some wallets expose window.ethereum.providers (array) when multiple providers present
-    const providers = eth.providers || (eth && Array.isArray(eth) ? eth : undefined)
-    if (providers && providers.length > 1) {
-      console.warn('Multiple injected wallet providers detected:', providers)
-      toast(
-        'Multiple wallet extensions detected. Please disable extra wallets (Backpack/Coinbase) and keep one (e.g., MetaMask) for stable login.',
-        { duration: 8000 }
+    if (authenticated && privyUser && privyUser.linkedAccounts) {
+      const monadAccount = privyUser.linkedAccounts.find(
+        account => account.type === 'cross_app' && 
+        account.providerApp.id === MONADGAMES_CONFIG.crossAppId
       )
+      
+      if (monadAccount) {
+        setMonadGamesUser({
+          username: monadAccount.username || null,
+          walletAddress: monadAccount.embeddedWallets?.[0]?.address || null,
+          providerApp: monadAccount.providerApp
+        })
+        console.log('MonadGames account found:', monadAccount)
+        toast.success('MonadGames ID connected!', { icon: '🎮' })
+      } else {
+        setMonadGamesUser(null)
+      }
+    } else {
+      setMonadGamesUser(null)
     }
-  }, [])
+  }, [authenticated, privyUser])
 
   // Utility: build user object for UI (Navbar/Header expects certain shape)
   const buildDisplayUser = useCallback(() => {
-    const walletAddress = address || null
+    const walletAddress = address || monadGamesUser?.walletAddress || null
 
     // Prefer MonadGames username, then contract username, then privy user data
     const displayName =
@@ -132,7 +121,7 @@ export const useMonadGames = () => {
     }
   }, [address, username, privyUser, monadGamesUser])
 
-  // MonadGames ID specific connect flow - simplified
+  // FIXED: MonadGames ID specific connect flow
   const connectMonadGamesID = useCallback(async () => {
     if (connecting) {
       return { success: false, error: 'already_connecting' }
@@ -140,77 +129,46 @@ export const useMonadGames = () => {
 
     setConnecting(true)
     try {
-      // Just call login - with cross_app as only method, it should show MonadGames ID
+      // If user is not authenticated at all, first get them authenticated
       if (!authenticated) {
         await login()
-        toast.success('MonadGames ID connected successfully!')
-        setConnecting(false)
-        return { success: true }
       }
 
-      setConnecting(false)
-      return { success: true }
+      // Now try to link/login with MonadGames ID cross-app account
+      try {
+        await loginWithCrossAppAccount({ appId: MONADGAMES_CONFIG.crossAppId })
+        toast.success('MonadGames ID connected successfully!', { icon: '🎮' })
+        setConnecting(false)
+        return { success: true }
+      } catch (crossAppError) {
+        console.log('loginWithCrossAppAccount failed, trying linkCrossAppAccount:', crossAppError)
+        
+        // If loginWithCrossAppAccount fails, try linkCrossAppAccount
+        try {
+          await linkCrossAppAccount({ appId: MONADGAMES_CONFIG.crossAppId })
+          toast.success('MonadGames ID linked successfully!', { icon: '🎮' })
+          setConnecting(false)
+          return { success: true }
+        } catch (linkError) {
+          console.error('Both loginWithCrossAppAccount and linkCrossAppAccount failed:', linkError)
+          toast.error('Failed to connect with MonadGames ID. Please make sure you have a MonadGames ID account.')
+          setConnecting(false)
+          return { success: false, error: linkError }
+        }
+      }
     } catch (error) {
       console.error('MonadGames ID connection error:', error)
       toast.error('Failed to connect with MonadGames ID')
       setConnecting(false)
       return { success: false, error }
     }
-  }, [authenticated, login, connecting])
+  }, [authenticated, login, loginWithCrossAppAccount, linkCrossAppAccount, connecting])
 
   // Generic connect wallet (fallback to regular login)
-  const connectWallet = useCallback(
-    async (provider = undefined) => {
-      // If MonadGames specific connection is requested, use that flow
-      if (provider && provider.includes(MONADGAMES_CONFIG.crossAppId)) {
-        return connectMonadGamesID()
-      }
-
-      // Otherwise use standard connection flow
-      if (connecting) {
-        return { success: false, error: 'already_connecting' }
-      }
-
-      if (authenticated && address) {
-        toast.success('Already connected', { icon: '✅', duration: 2000 })
-        return { success: true, address }
-      }
-
-      setConnecting(true)
-      try {
-        if (!authenticated) {
-          await login()
-        }
-
-        if (!window.ethereum || !window.ethereum.request) {
-          toast.error('No injected wallet found. Please install MetaMask or a compatible wallet.')
-          setConnecting(false)
-          return { success: false, error: 'no_wallet' }
-        }
-
-        try {
-          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
-          if (accounts && accounts.length > 0) {
-            toast.success('Wallet connected!', { icon: '🔗', duration: 2000 })
-            setConnecting(false)
-            return { success: true, address: accounts[0] }
-          } else {
-            toast.error('No wallet accounts returned. Please unlock your wallet.')
-            setConnecting(false)
-            return { success: false, error: 'no_accounts' }
-          }
-        } catch (reqErr) {
-          console.error('eth_requestAccounts error:', reqErr)
-          toast.error('Wallet permission request failed or was dismissed.')
-          setConnecting(false)
-          return { success: false, error: reqErr }
-        }
-      } finally {
-        setConnecting(false)
-      }
-    },
-    [authenticated, address, login, connecting, connectMonadGamesID]
-  )
+  const connectWallet = useCallback(async () => {
+    // For MonadGames integration, always use the MonadGames ID flow
+    return connectMonadGamesID()
+  }, [connectMonadGamesID])
 
   // Provide alias names expected by Navbar/Header
   const connect = connectWallet
@@ -220,10 +178,10 @@ export const useMonadGames = () => {
     try {
       await logout()
       setMonadGamesUser(null)
+      toast.success('Disconnected from MonadGames ID', { duration: 2000 })
     } catch (err) {
-      console.warn('Privy logout non-fatal error:', err)
-    } finally {
-      toast.success('Wallet disconnected', { duration: 2000 })
+      console.warn('Privy logout error:', err)
+      toast.error('Error disconnecting')
     }
   }, [logout])
 
@@ -233,8 +191,10 @@ export const useMonadGames = () => {
   // Submit score (keeps your contract interaction pattern)
   const submitGameScore = useCallback(
     async (gameStats) => {
-      if (!address || !authenticated) {
-        toast.error('Please connect your wallet first')
+      const activeAddress = address || monadGamesUser?.walletAddress
+      
+      if (!activeAddress || !authenticated) {
+        toast.error('Please connect your MonadGames ID first')
         return false
       }
 
@@ -272,7 +232,7 @@ export const useMonadGames = () => {
           distance,
           powerupsCollected,
           username: monadGamesUser?.username || username,
-          wallet: address
+          wallet: activeAddress
         })
 
         return true
@@ -284,13 +244,15 @@ export const useMonadGames = () => {
         setIsSubmittingScore(false)
       }
     },
-    [address, authenticated, submitScore, monadGamesUser, username]
+    [address, monadGamesUser?.walletAddress, authenticated, submitScore, monadGamesUser, username]
   )
 
   const updateUsername = useCallback(
     async (newUsername) => {
-      if (!address || !authenticated) {
-        toast.error('Please connect your wallet first')
+      const activeAddress = address || monadGamesUser?.walletAddress
+      
+      if (!activeAddress || !authenticated) {
+        toast.error('Please connect your MonadGames ID first')
         return false
       }
 
@@ -338,46 +300,15 @@ export const useMonadGames = () => {
         return false
       }
     },
-    [address, authenticated, setUsernameContract]
+    [address, monadGamesUser?.walletAddress, authenticated, setUsernameContract]
   )
-
-  // react to provider / chain events (defensive)
-  useEffect(() => {
-    if (!window.ethereum) return
-
-    const handleAccounts = (accounts) => {
-      if (!accounts || accounts.length === 0) {
-        toast('Wallet disconnected or locked', { icon: '⚠️' })
-      } else {
-        toast.success('Account changed', { duration: 1500 })
-      }
-    }
-
-    const handleChain = (chainId) => {
-      // optional: verify chainId === expected chain
-    }
-
-    try {
-      window.ethereum.on('accountsChanged', handleAccounts)
-      window.ethereum.on('chainChanged', handleChain)
-    } catch (e) {
-      console.warn('Failed to attach ethereum listeners', e)
-    }
-
-    return () => {
-      try {
-        window.ethereum.removeListener('accountsChanged', handleAccounts)
-        window.ethereum.removeListener('chainChanged', handleChain)
-      } catch (e) {}
-    }
-  }, [])
 
   const userInfo = buildDisplayUser()
 
   return {
     // status
-    isConnected: Boolean(authenticated && address),
-    address,
+    isConnected: Boolean(authenticated && (address || monadGamesUser?.walletAddress)),
+    address: address || monadGamesUser?.walletAddress,
     user: userInfo,
     username,
     playerStats,
@@ -399,6 +330,7 @@ export const useMonadGames = () => {
     connectWallet,
     connectMonadGamesID, // Specific MonadGames ID connect method
     connect, // alias expected by Navbar
+
     disconnectWallet,
     logout: logoutFn,
 
@@ -407,7 +339,7 @@ export const useMonadGames = () => {
     updateUsername,
 
     // utilities
-    canSubmitScore: () => Boolean(authenticated && address && CONTRACT_ADDRESSES.NEON_RUNNER_GAME),
+    canSubmitScore: () => Boolean(authenticated && (address || monadGamesUser?.walletAddress) && CONTRACT_ADDRESSES.NEON_RUNNER_GAME),
     formatAddress: (addr) => (addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : ''),
     isValidUsername: (name) => name && name.trim().length >= 3 && name.trim().length <= 20,
   }

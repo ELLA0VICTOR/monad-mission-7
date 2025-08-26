@@ -13,7 +13,6 @@ import PowerupShop from './components/UI/PowerupShop'
 
 const queryClient = new QueryClient()
 
-
 const MONAD_CROSS_APP_ID = 'cmd8euall0037le0my79qpz42'
 
 function App() {
@@ -23,16 +22,14 @@ function App() {
     setCurrentView(view)
   }
 
-  
   const privyAppId = import.meta.env.VITE_PRIVY_APP_ID || 'cmeoh0zfu0339l80bldo6zjou'
 
   return (
     <PrivyProvider
       appId={privyAppId}
       config={{
-       
+        // THIS IS THE KEY FIX: Add MonadGames ID to login methods
         loginMethodsAndOrder: {
-          
           primary: [`privy:${MONAD_CROSS_APP_ID}`, 'wallet', 'email'],
         },
 
@@ -40,7 +37,7 @@ function App() {
           theme: 'dark',
           accentColor: '#00ff88',
           logo: '/neon-runner-logo.png',
-          showWalletLoginFirst: true,
+          showWalletLoginFirst: false, // Changed to false so MonadGames ID shows first
           walletChainType: 'ethereum-only',
         },
 
@@ -53,15 +50,11 @@ function App() {
           noPromptOnMfaRequired: false,
         },
 
-        
         supportedChains: [monadTestnet],
         defaultChain: monadTestnet,
 
-        customAuth: {
-          enabled: true,
-          name: 'MONAD GAMES ID',
-          logo: 'https://app.privy.io/api/img?src=https://monad.xyz/favicon.ico',
-        },
+        // Remove customAuth - it conflicts with cross-app accounts
+        // The MonadGames ID branding will come from the cross-app flow
       }}
     >
       <QueryClientProvider client={queryClient}>
