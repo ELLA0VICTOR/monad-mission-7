@@ -1,5 +1,5 @@
+// frontend/src/utils/monadgames-manager.js
 import { MONADGAMES_CONFIG } from './monadgames-config.js';
-
 
 const API_BASE = MONADGAMES_CONFIG.apiBase || window.location.origin;
 
@@ -37,5 +37,38 @@ const MonadGamesManagerClient = {
     }
   },
 };
+
+// Expose an initializer that registers a light-weight global manager on window
+export function initializeMonadGamesManager() {
+  if (typeof window === 'undefined') return null;
+
+  if (window.monadGamesManager) {
+    // update submit method if it changed
+    window.monadGamesManager.submitScoreToBackend = MonadGamesManagerClient.submitScoreToBackend;
+    return window.monadGamesManager;
+  }
+
+  const manager = {
+    isAuthenticated: false,
+    username: null,
+    walletAddress: null,
+    error: null,
+
+    // public accessor for other code that expects getUserData()
+    getUserData: () => ({
+      username: manager.username,
+      walletAddress: manager.walletAddress,
+      isAuthenticated: manager.isAuthenticated,
+      error: manager.error,
+    }),
+
+    // method used by the frontend to submit to your backend
+    submitScoreToBackend: MonadGamesManagerClient.submitScoreToBackend,
+  };
+
+  window.monadGamesManager = manager;
+  console.log('[monadgames-manager] initialized window.monadGamesManager');
+  return manager;
+}
 
 export default MonadGamesManagerClient;

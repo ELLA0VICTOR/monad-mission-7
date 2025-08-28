@@ -45,8 +45,9 @@ export const useGameLogic = () => {
     }
   }, [])
 
-  // Create the GameEngine as soon as both sprites are loaded and the canvas is available.
-  useEffect(() => {
+  
+   // Create the GameEngine as soon as both sprites are loaded and the canvas is available.
+   useEffect(() => {
     // If engine already created, nothing to do
     if (gameEngineRef.current) return
 
@@ -84,7 +85,8 @@ export const useGameLogic = () => {
         toast.error('Failed to initialize game engine')
       }
     }
-  }, [spritesLoaded, canvasRef.current]) // Run when spritesLoaded flips or canvasRef becomes available
+  }, [spritesLoaded, canvasRef])
+// Run when spritesLoaded flips or canvasRef becomes available
 
   // startGame with a helpful fallback toast/log if engine not ready
   const startGame = useCallback(() => {
@@ -171,33 +173,37 @@ export const useGameLogic = () => {
   }, [gameStats])
 
   // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyPress = (event) => {
-      switch (event.code) {
-        case 'KeyP':
-          if (gameState === 'playing') {
-            pauseGame()
-          } else if (gameState === 'paused') {
-            resumeGame()
-          }
-          break
-        case 'KeyR':
-          if (gameState === 'gameOver') {
-            restartGame()
-          }
-          break
-        case 'Escape':
-          if (gameState !== 'menu') {
-            backToMenu()
-          }
-          break
+    // Handle keyboard shortcuts
+    useEffect(() => {
+      const handleKeyPress = (event) => {
+        // DEBUG: log key presses and current gameState so we can see handler activity in console
+        console.log('Key pressed', event.code, 'gameState=', gameState);
+  
+        switch (event.code) {
+          case 'KeyP':
+            if (gameState === 'playing') {
+              pauseGame()
+            } else if (gameState === 'paused') {
+              resumeGame()
+            }
+            break
+          case 'KeyR':
+            if (gameState === 'gameOver') {
+              restartGame()
+            }
+            break
+          case 'Escape':
+            if (gameState !== 'menu') {
+              backToMenu()
+            }
+            break
+        }
       }
-    }
-
-    window.addEventListener('keydown', handleKeyPress)
-    return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [gameState, pauseGame, resumeGame, restartGame, backToMenu])
-
+  
+      window.addEventListener('keydown', handleKeyPress)
+      return () => window.removeEventListener('keydown', handleKeyPress)
+    }, [gameState, pauseGame, resumeGame, restartGame, backToMenu])
+  
   // Cleanup on unmount (ensure engine stopped)
   useEffect(() => {
     return () => {

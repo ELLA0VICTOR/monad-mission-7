@@ -427,13 +427,16 @@ export class GameEngine {
   applyPowerupEffect(type, config) {
     
     this.activePowerups = this.activePowerups.filter(p => p.type !== type)
-    
-    // Add new powerup
-    this.activePowerups.push({
-      type,
-      timeLeft: config.duration,
-      config
-    })
+
+// Add new powerup (ensure timeLeft is in ms)
+const durationMs = (config.duration && config.duration > 1000) ? config.duration : (config.duration * 1000)
+
+this.activePowerups.push({
+  type,
+  timeLeft: durationMs,
+  config
+})
+
     
     switch (config.effect) {
       case 'speed':

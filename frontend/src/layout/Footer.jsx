@@ -6,7 +6,7 @@ const Footer = () => {
   const links = [
     { name: 'Monad Explorer', url: 'https://testnet.monadexplorer.com', icon: Globe },
     { name: 'Mission 7 Hub', url: 'https://monad-foundation.notion.site/Mission-7-Monad-Game-Jam-Resources-24d6367594f280268926d344bc82c67a', icon: ExternalLink },
-    { name: 'GitHub Repo', url: '#', icon: Github }, // You'll need to add your actual repo URL
+    { name: 'GitHub Repo', url: 'https://github.com/ELLA0VICTOR/monad-mission-7', icon: Github }, // You'll need to add your actual repo URL
   ]
 
   return (
@@ -120,7 +120,7 @@ const Footer = () => {
             
             <div className="text-xs">
               Made with ⚡ by{' '}
-              <span className="text-green-400 font-semibold">Anonymous Builder</span>
+              <span className="text-green-400 font-semibold">Vickytor</span>
             </div>
           </div>
         </motion.div>

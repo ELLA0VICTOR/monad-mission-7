@@ -1,10 +1,17 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Gamepad2, Zap, Shield, AlertCircle } from 'lucide-react'
+import { Gamepad2, Zap, Shield, AlertCircle, User, ExternalLink } from 'lucide-react'
 import { useMonadGames } from '../../hooks/useMonadGames'
+import { MONADGAMES_CONFIG } from '../../utils/monadgames-config'
 
 const WalletConnect = ({ className = '' }) => {
-  const { connectMonadGamesID, isConnected, monadGamesUser } = useMonadGames()
+  const { 
+    connectMonadGamesID, 
+    isConnected, 
+    monadGamesUser, 
+    monadGamesAddress,
+    connecting 
+  } = useMonadGames()
   const [isConnecting, setIsConnecting] = useState(false)
 
   const handleConnect = async () => {
@@ -18,7 +25,50 @@ const WalletConnect = ({ className = '' }) => {
     }
   }
 
-  if (isConnected) return null
+  // If connected, show user info or username registration prompt
+  if (isConnected && monadGamesAddress) {
+    return (
+      <div className={`flex items-center space-x-4 ${className}`}>
+        {monadGamesUser?.username ? (
+          // User has username - show connected state
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center space-x-3 bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-2 rounded-lg"
+          >
+            <User size={16} className="text-white" />
+            <span className="text-white font-medium">
+              Welcome, {monadGamesUser.username}!
+            </span>
+            <div className="text-xs text-green-100">
+              {monadGamesAddress.slice(0, 6)}...{monadGamesAddress.slice(-4)}
+            </div>
+          </motion.div>
+        ) : (
+          // User connected but no username - show registration prompt
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center space-x-3 bg-gradient-to-r from-yellow-600 to-orange-600 px-4 py-2 rounded-lg"
+          >
+            <AlertCircle size={16} className="text-white" />
+            <span className="text-white font-medium">
+              MonadGames ID Connected!
+            </span>
+            <a
+              href={MONADGAMES_CONFIG.registrationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-1 bg-white text-orange-600 px-2 py-1 rounded text-xs hover:bg-gray-100 transition-colors"
+            >
+              <span>Register Username</span>
+              <ExternalLink size={12} />
+            </a>
+          </motion.div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className={`flex items-center space-x-4 ${className}`}>
@@ -26,10 +76,10 @@ const WalletConnect = ({ className = '' }) => {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={handleConnect}
-        disabled={isConnecting}
+        disabled={isConnecting || connecting}
         className="btn-neon px-6 py-3 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500"
       >
-        {isConnecting ? (
+        {isConnecting || connecting ? (
           <>
             <motion.div
               animate={{ rotate: 360 }}

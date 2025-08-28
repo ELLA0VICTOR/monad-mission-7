@@ -20,10 +20,10 @@ const Leaderboard = () => {
     getScoreColor
   } = useLeaderboard()
 
-  const { isConnected, user } = useMonadGames()
+  const { isConnected, user, playerStats } = useMonadGames()
   const [selectedTab, setSelectedTab] = useState('all') 
 
-  /
+  
   useEffect(() => {
     if (isConnected && user.address) {
       updateCurrentUser(user.address)

@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Gamepad2, Trophy, ShoppingCart, User, LogOut } from 'lucide-react'
+import { Gamepad2, Trophy, ShoppingCart, User, LogOut, GamepadIcon } from 'lucide-react'
 import { useMonadGames } from '../hooks/useMonadGames'
 import WalletConnect from '../components/UI/WalletConnect'
 
 const Header = ({ onViewChange, currentView }) => {
-  const { isConnected, user, playerStats, disconnectWallet } = useMonadGames()
+  const { isConnected, user, playerStats, disconnectWallet, monadGamesUser, monadGamesAddress } = useMonadGames()
   const [showUserMenu, setShowUserMenu] = useState(false)
 
   const navigationItems = [
@@ -16,6 +16,19 @@ const Header = ({ onViewChange, currentView }) => {
 
   const handleNavClick = (viewId) => {
     onViewChange(viewId)
+  }
+
+  // Get the best display name - prefer MonadGames username
+  const getDisplayName = () => {
+    if (monadGamesUser?.username) {
+      return monadGamesUser.username
+    }
+    return user?.displayName ?? 'Player'
+  }
+
+  // Get the best wallet address - prefer MonadGames address
+  const getWalletAddress = () => {
+    return monadGamesAddress || user?.address || 'Unknown'
   }
 
   return (
@@ -63,8 +76,14 @@ const Header = ({ onViewChange, currentView }) => {
                   onClick={() => setShowUserMenu((prev) => !prev)}
                   className="flex items-center space-x-2 text-sm font-medium text-green-400 hover:text-green-300"
                 >
-                  <User size={18} />
-                  <span>{user?.displayName ?? 'Player'}</span>
+                  {monadGamesUser ? (
+                    <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+                      <GamepadIcon size={14} className="text-white" />
+                    </div>
+                  ) : (
+                    <User size={18} />
+                  )}
+                  <span>{getDisplayName()}</span>
                 </button>
 
                 <AnimatePresence>
@@ -73,14 +92,36 @@ const Header = ({ onViewChange, currentView }) => {
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      className="absolute right-0 mt-2 w-48 bg-gray-800 border border-green-400/30 rounded-lg shadow-lg overflow-hidden z-50"
+                      className="absolute right-0 mt-2 w-56 bg-gray-800 border border-green-400/30 rounded-lg shadow-lg overflow-hidden z-50"
                     >
                       <div className="px-4 py-3 border-b border-gray-700">
-                        <p className="text-xs text-gray-400">Wallet</p>
-                        <p className="text-sm font-medium text-green-400 truncate">
-                          {user?.address}
+                        {monadGamesUser ? (
+                          <>
+                            <div className="flex items-center space-x-2 mb-2">
+                              <GamepadIcon size={14} className="text-purple-400" />
+                              <span className="text-xs text-purple-400 font-medium">MonadGames ID</span>
+                            </div>
+                            <p className="text-sm font-medium text-green-400">
+                              {monadGamesUser.username || 'No Username'}
+                            </p>
+                            {!monadGamesUser.username && (
+                              <a
+                                href="https://monad-games-id-site.vercel.app"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-400 hover:text-blue-300 underline"
+                              >
+                                Register Username
+                              </a>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-xs text-gray-400">Wallet</p>
+                        )}
+                        <p className="text-sm font-medium text-green-400 truncate mt-1">
+                          {getWalletAddress()}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 mt-1">
                           Score: {playerStats?.highScore ?? 0}
                         </p>
                       </div>

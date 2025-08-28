@@ -14,10 +14,10 @@ import { MONADGAMES_CONFIG } from '../utils/monadgames-config'
 // Hook that provides connect/disconnect/submit flows for Monad Games + Privy integration
 export const useMonadGames = () => {
   // Privy
-  const { login, logout, authenticated, user: privyUser } = usePrivy()
+  const { login, logout, authenticated, user: privyUser, ready } = usePrivy()
   
-  // THIS IS THE KEY FIX: Use useCrossAppAccounts hook
-  const { loginWithCrossAppAccount, linkCrossAppAccount } = useCrossAppAccounts()
+  // Cross-app accounts for MonadGames ID
+  const { loginWithCrossAppAccount, linkCrossAppAccount, getCrossAppAccounts } = useCrossAppAccounts()
 
   // Wagmi (injected wallet state)
   const { address, isConnected: wagmiIsConnected } = useAccount()
@@ -32,27 +32,111 @@ export const useMonadGames = () => {
   })
   const [connecting, setConnecting] = useState(false)
   const [monadGamesUser, setMonadGamesUser] = useState(null)
+  const [monadGamesAddress, setMonadGamesAddress] = useState('')
 
   // Contract write hooks (retain your existing usage)
   const { writeContract: submitScore } = useWriteContract()
   const { writeContract: setUsernameContract } = useWriteContract()
+  const activeAddressForReads = address || monadGamesAddress || undefined
 
   // Contract read hooks to populate player stats / username
   const { data: contractStats } = useReadContract({
     address: CONTRACT_ADDRESSES.NEON_RUNNER_GAME,
     abi: NEON_RUNNER_ABI,
     functionName: 'getPlayerStats',
-    args: address ? [address] : undefined,
-    enabled: !!address && !!CONTRACT_ADDRESSES.NEON_RUNNER_GAME,
+    args: activeAddressForReads ? [activeAddressForReads] : undefined,
+    enabled: !!activeAddressForReads && !!CONTRACT_ADDRESSES.NEON_RUNNER_GAME,
   })
 
   const { data: contractUsername } = useReadContract({
     address: CONTRACT_ADDRESSES.NEON_RUNNER_GAME,
     abi: NEON_RUNNER_ABI,
     functionName: 'getUsername',
-    args: address ? [address] : undefined,
-    enabled: !!address && !!CONTRACT_ADDRESSES.NEON_RUNNER_GAME,
+    args: activeAddressForReads ? [activeAddressForReads] : undefined,
+    enabled: !!activeAddressForReads && !!CONTRACT_ADDRESSES.NEON_RUNNER_GAME,
   })
+ 
+ // Robust check for cross-app (MonadGames ID) account using getCrossAppAccounts when available
+useEffect(() => {
+  const checkCrossApp = async () => {
+    if (!authenticated) {
+      setMonadGamesAddress('')
+      setMonadGamesUser(null)
+      return
+    }
+
+    try {
+      let crossApps = []
+
+      // Prefer the direct API if available
+      if (typeof getCrossAppAccounts === 'function') {
+        // getCrossAppAccounts may return [] if none linked
+        crossApps = await getCrossAppAccounts()
+      } else if (privyUser?.linkedAccounts) {
+        crossApps = privyUser.linkedAccounts
+      }
+
+      console.log('checkCrossApp: found crossApps count=', (crossApps || []).length)
+
+      const crossAppAccount = (crossApps || []).find(
+        account =>
+          account.type === 'cross_app' &&
+          account.providerApp?.id === MONADGAMES_CONFIG.crossAppId
+      )
+
+      if (crossAppAccount && crossAppAccount.embeddedWallets?.length > 0) {
+        const addr = crossAppAccount.embeddedWallets[0].address
+        setMonadGamesAddress(addr)
+        setMonadGamesUser({
+          username: crossAppAccount.username || null,
+          walletAddress: addr,
+          providerApp: crossAppAccount.providerApp
+        })
+        console.log('MonadGames crossAppAccount found:', crossAppAccount)
+      } else {
+        // Clear if nothing relevant found
+        setMonadGamesAddress('')
+        setMonadGamesUser(null)
+      }
+    } catch (err) {
+      console.error('Error checking cross-app accounts:', err)
+      setMonadGamesAddress('')
+      setMonadGamesUser(null)
+    }
+  }
+
+  // Run check once (and again when dependencies change)
+  checkCrossApp()
+}, [authenticated, privyUser, ready, getCrossAppAccounts])
+
+
+  // Fetch MonadGames username from API
+  useEffect(() => {
+    const fetchMonadGamesUsername = async () => {
+      if (!monadGamesAddress) return
+      
+      try {
+        const response = await fetch(
+          `${MONADGAMES_CONFIG.apiEndpoint}?wallet=${monadGamesAddress}`
+        )
+        
+        if (response.ok) {
+          const data = await response.json()
+          if (data.hasUsername && data.user) {
+            setMonadGamesUser(prev => ({
+              ...prev,
+              username: data.user.username
+            }))
+            console.log('MonadGames username fetched:', data.user.username)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch MonadGames username:', error)
+      }
+    }
+
+    fetchMonadGamesUsername()
+  }, [monadGamesAddress])
 
   useEffect(() => {
     if (contractStats) {
@@ -70,33 +154,9 @@ export const useMonadGames = () => {
     }
   }, [contractUsername])
 
-  // FIXED: Check for MonadGames cross-app account properly
-  useEffect(() => {
-    if (authenticated && privyUser && privyUser.linkedAccounts) {
-      const monadAccount = privyUser.linkedAccounts.find(
-        account => account.type === 'cross_app' && 
-        account.providerApp.id === MONADGAMES_CONFIG.crossAppId
-      )
-      
-      if (monadAccount) {
-        setMonadGamesUser({
-          username: monadAccount.username || null,
-          walletAddress: monadAccount.embeddedWallets?.[0]?.address || null,
-          providerApp: monadAccount.providerApp
-        })
-        console.log('MonadGames account found:', monadAccount)
-        toast.success('MonadGames ID connected!', { icon: '🎮' })
-      } else {
-        setMonadGamesUser(null)
-      }
-    } else {
-      setMonadGamesUser(null)
-    }
-  }, [authenticated, privyUser])
-
   // Utility: build user object for UI (Navbar/Header expects certain shape)
   const buildDisplayUser = useCallback(() => {
-    const walletAddress = address || monadGamesUser?.walletAddress || null
+    const walletAddress = address || monadGamesAddress || null
 
     // Prefer MonadGames username, then contract username, then privy user data
     const displayName =
@@ -119,9 +179,9 @@ export const useMonadGames = () => {
       balance: null,
       monadGamesConnected: !!monadGamesUser,
     }
-  }, [address, username, privyUser, monadGamesUser])
+  }, [address, monadGamesAddress, username, privyUser, monadGamesUser])
 
-  // FIXED: MonadGames ID specific connect flow
+  // FIXED: MonadGames ID specific connect flow (following documentation)
   const connectMonadGamesID = useCallback(async () => {
     if (connecting) {
       return { success: false, error: 'already_connecting' }
@@ -178,6 +238,7 @@ export const useMonadGames = () => {
     try {
       await logout()
       setMonadGamesUser(null)
+      setMonadGamesAddress('')
       toast.success('Disconnected from MonadGames ID', { duration: 2000 })
     } catch (err) {
       console.warn('Privy logout error:', err)
@@ -189,67 +250,135 @@ export const useMonadGames = () => {
   const logoutFn = logoutAlias
 
   // Submit score (keeps your contract interaction pattern)
-  const submitGameScore = useCallback(
-    async (gameStats) => {
-      const activeAddress = address || monadGamesUser?.walletAddress
-      
-      if (!activeAddress || !authenticated) {
-        toast.error('Please connect your MonadGames ID first')
-        return false
-      }
+  // replace existing submitGameScore implementation with this
+const submitGameScore = useCallback(
+  async (gameStats) => {
+    const activeAddress = address || monadGamesAddress;
+    const USE_SERVER_RELAY = import.meta.env.VITE_USE_SERVER_RELAY === 'true';
+    const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+    const SUBMIT_SECRET = import.meta.env.VITE_SUBMIT_SECRET || null;
 
-      if (
-        !CONTRACT_ADDRESSES.NEON_RUNNER_GAME ||
-        CONTRACT_ADDRESSES.NEON_RUNNER_GAME === '0x0000000000000000000000000000000000000000'
-      ) {
-        toast.error('Game contract not deployed yet')
-        return false
-      }
+    if (!activeAddress || !authenticated) {
+      toast.error('Please connect your MonadGames ID first');
+      return false;
+    }
 
-      try {
-        setIsSubmittingScore(true)
-        const { score, distance, powerupsCollected } = gameStats
-        const params = buildSubmitScoreParams(score, distance, powerupsCollected || 0)
+    if (
+      !CONTRACT_ADDRESSES.NEON_RUNNER_GAME ||
+      CONTRACT_ADDRESSES.NEON_RUNNER_GAME === '0x0000000000000000000000000000000000000000'
+    ) {
+      toast.error('Game contract not deployed yet');
+      return false;
+    }
 
-        toast.loading('Submitting score to blockchain...', { id: 'submit-score' })
+    try {
+      setIsSubmittingScore(true);
+      const { score, distance = 0, powerupsCollected = 0 } = gameStats || {};
+      const numericScore = Number(score || 0);
 
-        await submitScore({
-          address: CONTRACT_ADDRESSES.NEON_RUNNER_GAME,
-          abi: NEON_RUNNER_ABI,
-          functionName: 'submitScore',
-          ...params,
-        })
+      // SERVER-RELAY PATH: POST to your backend (server will call the Monad Games contract)
+      if (USE_SERVER_RELAY) {
+        toast.loading('Submitting score to server relay...', { id: 'submit-score' });
 
-        toast.success(`Score submitted: ${score.toLocaleString()}!`, {
+        const body = {
+          playerAddress: activeAddress,
+          scoreAmount: numericScore,
+          transactionAmount: 1,
+          distance: Number(distance || 0),
+          powerupsCollected: Number(powerupsCollected || 0),
+          source: 'neon-runner-frontend'
+        };
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (SUBMIT_SECRET) headers['x-submit-secret'] = SUBMIT_SECRET;
+
+        const resp = await fetch(`${API_BASE}/api/submit-score`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+
+        if (!resp.ok) {
+          const json = await resp.json().catch(() => ({}));
+          console.error('Server-relay failed', resp.status, json);
+          toast.error('Server-relay submission failed');
+          return false;
+        }
+
+        const json = await resp.json().catch(() => null);
+        toast.success(`Score submitted to global leaderboard: ${numericScore.toLocaleString()}!`, {
           id: 'submit-score',
           icon: '🏆',
           duration: 4000,
-        })
+        });
+        console.log('Server-relay result', json);
 
-        // Log to MonadGames ID system
-        console.log('Score submitted to MonadGames ID:', {
-          score,
-          distance,
-          powerupsCollected,
-          username: monadGamesUser?.username || username,
-          wallet: activeAddress
-        })
-
-        return true
-      } catch (error) {
-        console.error('Failed to submit score:', error)
-        toast.error('Failed to submit score to blockchain', { id: 'submit-score' })
-        return false
-      } finally {
-        setIsSubmittingScore(false)
+        return true;
       }
-    },
-    [address, monadGamesUser?.walletAddress, authenticated, submitScore, monadGamesUser, username]
-  )
 
+      // WALLET-FIRST PATH: Send transaction from user's wallet (existing behavior)
+      toast.loading('Submitting score to blockchain...', { id: 'submit-score' });
+
+      const params = buildSubmitScoreParams(numericScore, Number(distance || 0), Number(powerupsCollected || 0));
+      await submitScore({
+        address: CONTRACT_ADDRESSES.NEON_RUNNER_GAME,
+        abi: NEON_RUNNER_ABI,
+        functionName: 'submitScore',
+        ...params,
+      });
+
+      toast.success(`Score submitted: ${numericScore.toLocaleString()}!`, {
+        id: 'submit-score',
+        icon: '🏆',
+        duration: 4000,
+      });
+
+      // Optionally notify backend (no harm if also server-relay is enabled separately)
+      (async () => {
+        try {
+          const apiBase = API_BASE;
+          const secret = SUBMIT_SECRET;
+          const headers = { 'Content-Type': 'application/json' };
+          if (secret) headers['x-submit-secret'] = secret;
+
+          await fetch(`${apiBase}/api/submit-score`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              playerAddress: activeAddress,
+              scoreAmount: numericScore,
+              transactionAmount: 1,
+              distance: Number(distance || 0),
+              powerupsCollected: Number(powerupsCollected || 0),
+            }),
+          });
+        } catch (e) {
+          console.warn('notify-backend failure', e);
+        }
+      })();
+
+      console.log('Score submitted to MonadGames ID:', {
+        score: numericScore,
+        distance,
+        powerupsCollected,
+        username: monadGamesUser?.username || username,
+        wallet: activeAddress,
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Failed to submit score:', error);
+      toast.error('Failed to submit score', { id: 'submit-score' });
+      return false;
+    } finally {
+      setIsSubmittingScore(false);
+    }
+  },
+  [address, monadGamesAddress, authenticated, submitScore, monadGamesUser, username]
+);
   const updateUsername = useCallback(
     async (newUsername) => {
-      const activeAddress = address || monadGamesUser?.walletAddress
+      const activeAddress = address || monadGamesAddress
       
       if (!activeAddress || !authenticated) {
         toast.error('Please connect your MonadGames ID first')
@@ -300,19 +429,58 @@ export const useMonadGames = () => {
         return false
       }
     },
-    [address, monadGamesUser?.walletAddress, authenticated, setUsernameContract]
+    [address, monadGamesAddress, authenticated, setUsernameContract]
   )
+    // Expose a small global manager expected by legacy code / submission manager
+    useEffect(() => {
+      const getUserData = () => ({
+        username: monadGamesUser?.username || username || privyUser?.username || null,
+        walletAddress: monadGamesAddress || address || null,
+        isAuthenticated: !!authenticated,
+        privyUser: privyUser || null
+      })
+  
+      // Provide minimal submission API (others can extend)
+      window.monadGamesManager = {
+        getUserData,
+        // optionally allow other modules to call submit via hook (this uses submitGameScore defined in this hook)
+        submitScore: async (score, distance = 0, powerups = 0, meta = {}) => {
+          // Use submitGameScore which already handles contract submission
+          try {
+            const result = await submitGameScore({ score, distance, powerupsCollected: powerups, ...meta });
+            return { success: !!result, message: result ? 'ok' : 'failed' }
+          } catch (err) {
+            return { success: false, error: String(err) }
+          }
+        }
+      }
+      // cleanup optional
+      return () => { /* keep the manager even if component unmounts? decide based on your app */ }
+    }, [monadGamesUser, monadGamesAddress, address, username, privyUser, authenticated, submitGameScore])
+
+      // keep the global manager updated for non-React modules that rely on window.monadGamesManager
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.monadGamesManager) {
+      window.monadGamesManager.username = monadGamesUser?.username || username || null
+      window.monadGamesManager.walletAddress = monadGamesAddress || address || null
+      window.monadGamesManager.isAuthenticated = Boolean(authenticated && (address || monadGamesAddress))
+      window.monadGamesManager.error = null
+    }
+  }, [monadGamesUser, monadGamesAddress, username, address, authenticated])
+
+  
 
   const userInfo = buildDisplayUser()
 
   return {
     // status
-    isConnected: Boolean(authenticated && (address || monadGamesUser?.walletAddress)),
-    address: address || monadGamesUser?.walletAddress,
+    isConnected: Boolean(authenticated && (address || monadGamesAddress)),
+    address: address || monadGamesAddress,
     user: userInfo,
     username,
     playerStats,
     monadGamesUser,
+    monadGamesAddress,
     estimatedRank: (() => {
       if (playerStats.highScore === 0) return null
       if (playerStats.highScore > 10000) return 'Top 10'
@@ -339,7 +507,7 @@ export const useMonadGames = () => {
     updateUsername,
 
     // utilities
-    canSubmitScore: () => Boolean(authenticated && (address || monadGamesUser?.walletAddress) && CONTRACT_ADDRESSES.NEON_RUNNER_GAME),
+    canSubmitScore: () => Boolean(authenticated && (address || monadGamesAddress) && CONTRACT_ADDRESSES.NEON_RUNNER_GAME),
     formatAddress: (addr) => (addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : ''),
     isValidUsername: (name) => name && name.trim().length >= 3 && name.trim().length <= 20,
   }
