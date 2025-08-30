@@ -16,7 +16,7 @@ function tryParseJSON(str) {
 // GET /api/leaderboard
 router.get('/', async (req, res) => {
   try {
-    const gameId = process.env.MONAD_GAMES_GAMEID || '112' // fallback to Neon_Runner
+    const gameId = process.env.MONAD_GAMES_GAMEID || '237' // fallback to Neon_Runner
     // Try both sensible param orders (some endpoints/platform proxies can be picky)
     const urls = [
       `https://monad-games-id-site.vercel.app/api/leaderboard?gameId=${gameId}&sortBy=scores&page=1`,
