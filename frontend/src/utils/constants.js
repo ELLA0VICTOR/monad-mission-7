@@ -130,7 +130,7 @@ export const SPRITES = {
   OBSTACLE: {
     width: 48,
     height: 48,
-    src: '/sprites/obstacle.png'  
+    src: '/sprites/obstacle.PNG'  
   },
   POWERUPS: {
     width: 300,
