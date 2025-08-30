@@ -1,9 +1,12 @@
+// frontend/src/components/UI/Leaderboard.jsx
 import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Trophy, RefreshCw, Award, Clock } from 'lucide-react'
 import { useMonadGames } from '../../hooks/useMonadGames'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000'
+// Normalize API base to avoid accidental double-slashes (e.g. "https://.../")
+const rawApiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000'
+const API_BASE = String(rawApiBase).replace(/\/+$/, '') // remove trailing slash(es)
 
 const Leaderboard = () => {
   const { isConnected, user } = useMonadGames()
@@ -14,36 +17,41 @@ const Leaderboard = () => {
   const [selectedTab, setSelectedTab] = useState('all')
 
   const fetchLeaderboard = async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
+    setIsLoading(true)
+    setError(null)
 
-      const resp = await fetch(`${API_BASE}/api/leaderboard`)
+    // build endpoint
+    const url = `${API_BASE}/api/leaderboard`
+    console.log('[Leaderboard] fetching leaderboard from', url)
+
+    try {
+      const resp = await fetch(url, { cache: 'no-store' })
       const text = await resp.text()
 
       if (!resp.ok) {
-        // If backend returned HTML (index.html), text will start with "<"
-        throw new Error(`HTTP ${resp.status} - ${text.slice(0, 200)}`)
+        // backend returned non-OK. show helpful error information (status + beginning of body)
+        throw new Error(`HTTP ${resp.status} - ${text.slice(0, 300)}`)
       }
 
-      // parse JSON safely
-      let data
+      // Attempt to parse JSON. If body is HTML, this will throw and we catch below.
+      let data = null
       try {
         data = JSON.parse(text)
       } catch (parseErr) {
-        throw new Error('Failed to parse leaderboard JSON: ' + (text.slice(0, 200)))
+        throw new Error('Failed to parse leaderboard JSON: ' + text.slice(0, 300))
       }
 
-      if (!data.success) throw new Error(data.error || 'Failed to fetch leaderboard')
+      if (!data || !data.success) {
+        throw new Error(data?.error || 'Leaderboard response missing "success" flag')
+      }
 
-      // format score + date
+      // format entries
       const formatted = (data.entries || []).map((entry, i) => {
         const ts = Number(entry.timestamp) || Date.now()
         return {
           ...entry,
           formattedScore: Number(entry.score || 0).toLocaleString(),
           date: new Date(ts).toLocaleDateString(),
-          // ensure rank exists
           rank: entry.rank || i + 1
         }
       })
@@ -53,6 +61,7 @@ const Leaderboard = () => {
     } catch (err) {
       console.error('fetchLeaderboard error', err)
       setError(String(err.message || err))
+      setLeaderboardData([])
     } finally {
       setIsLoading(false)
     }
@@ -60,7 +69,7 @@ const Leaderboard = () => {
 
   useEffect(() => {
     fetchLeaderboard()
-    // optionally refresh periodically
+    // optional: refresh periodically
     // const id = setInterval(fetchLeaderboard, 30_000)
     // return () => clearInterval(id)
   }, [])
@@ -89,8 +98,6 @@ const Leaderboard = () => {
 
   const renderLeaderboardEntry = (entry, index) => {
     const isCurrent = isConnected && user?.address && entry.address && user.address.toLowerCase() === entry.address.toLowerCase()
-
-    // fallback for missing addresses as key
     const key = `${entry.address || 'noaddr'}-${entry.rank || index}-${index}`
 
     return (
