@@ -259,7 +259,11 @@ const submitGameScore = useCallback(
     // >>> PREFER_MONAD: prefer monadGamesAddress for submission. If monadGamesAddress not present, refuse.
     const activeAddress = monadGamesAddress || address || null;
     const USE_SERVER_RELAY = import.meta.env.VITE_USE_SERVER_RELAY === 'true';
-    const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+
+    // Normalize API base to avoid double slashes like: https://...//api/...
+    const rawApiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+    const API_BASE = String(rawApiBase).replace(/\/+$/, ''); // remove trailing slash(es)
+
     const SUBMIT_SECRET = import.meta.env.VITE_SUBMIT_SECRET || null;
 
     if (!activeAddress || !authenticated || !monadGamesAddress) {
@@ -299,8 +303,9 @@ const submitGameScore = useCallback(
         if (SUBMIT_SECRET) headers['x-submit-secret'] = SUBMIT_SECRET;
 
         // ADDED LOG: show exactly what we're sending to backend
-        console.log('[useMonadGames] server-relay POST body', {
-          api: `${API_BASE}/api/submit-score`,
+        const submitUrl = `${API_BASE}/api/submit-score`;
+        console.log('[useMonadGames] server-relay preparing POST', {
+          submitUrl,
           body,
           headers,
           monadGamesAddress,
@@ -309,15 +314,27 @@ const submitGameScore = useCallback(
           privyUser
         });
 
-        const resp = await fetch(`${API_BASE}/api/submit-score`, {
+        const resp = await fetch(submitUrl, {
           method: 'POST',
           headers,
           body: JSON.stringify(body),
         });
 
         if (!resp.ok) {
-          const json = await resp.json().catch(() => ({}));
-          console.error('Server-relay failed', resp.status, json);
+          // try to parse JSON, fall back to text
+          let json = {}
+          try {
+            json = await resp.json().catch(() => ({}))
+          } catch (e) {
+            // ignore
+          }
+          let text = ''
+          try {
+            text = await resp.text().catch(() => '')
+          } catch (e) {
+            // ignore
+          }
+          console.error('Server-relay failed', resp.status, { json, text })
           toast.error('Server-relay submission failed');
           return false;
         }
