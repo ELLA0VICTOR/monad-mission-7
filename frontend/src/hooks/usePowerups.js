@@ -1,28 +1,86 @@
+// frontend/src/hooks/usePowerups.js
 import { useState, useEffect, useCallback } from 'react'
-import { useAccount, useWriteContract, useReadContract } from 'wagmi'
+import { useReadContract } from 'wagmi' // we keep read via wagmi for convenience
+import { usePrivy, useCrossAppAccounts } from '@privy-io/react-auth'
 import { CONTRACT_ADDRESSES, POWERUP_NFT_ABI, buildMintPowerupParams } from '../utils/blockchain'
 import { POWERUP_TYPES } from '../utils/constants'
+import { useMonadGames } from './useMonadGames'
 import toast from 'react-hot-toast'
 import { parseEther } from 'viem'
 
+// monad wallet helpers you already included
+import {
+  createMonadWalletClient,
+  getEmbeddedWalletFromPrivy,
+  estimateGasForMint,
+  checkBalance,
+  formatBalance
+} from '../utils/monadWalletUtils'
+
 export const usePowerups = () => {
-  const { address, isConnected } = useAccount()
+  // MonadGames connection info
+  const { monadGamesAddress, isConnected: monadConnected } = useMonadGames()
+
+  // Privy context + cross-app helper
+  const { authenticated, user: privyUser } = usePrivy()
+  const { getCrossAppAccounts } = useCrossAppAccounts ? useCrossAppAccounts() : { getCrossAppAccounts: null }
+
   const [ownedPowerups, setOwnedPowerups] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [isMinting, setIsMinting] = useState(false)
 
-  // Contract interactions
-  const { writeContract: mintPowerup } = useWriteContract()
-  const { writeContract: usePowerup } = useWriteContract()
+  // embeddedSigner will hold { embeddedWallet, walletClient } when available
+  const [embeddedSigner, setEmbeddedSigner] = useState(null)
 
-  // Read owned powerups from contract
+  // Read owned powerups from contract using MonadGames address
+  const activeAddress = monadGamesAddress
   const { data: contractPowerups, refetch: refetchPowerups } = useReadContract({
     address: CONTRACT_ADDRESSES.POWERUP_NFT,
     abi: POWERUP_NFT_ABI,
     functionName: 'getPowerups',
-    args: address ? [address] : undefined,
-    enabled: !!address && !!CONTRACT_ADDRESSES.POWERUP_NFT && CONTRACT_ADDRESSES.POWERUP_NFT !== '0x0000000000000000000000000000000000000000',
+    args: activeAddress ? [activeAddress] : undefined,
+    enabled: !!activeAddress && !!CONTRACT_ADDRESSES.POWERUP_NFT && CONTRACT_ADDRESSES.POWERUP_NFT !== '0x0000000000000000000000000000000000000000',
   })
+
+  // Build embedded signer from Privy cross-app accounts (robust, same logic as useMonadGames)
+  useEffect(() => {
+    const setupEmbeddedSigner = async () => {
+      if (!authenticated || !monadGamesAddress) {
+        setEmbeddedSigner(null)
+        return
+      }
+
+      try {
+        // Try utility that will use privyUser or getCrossAppAccounts
+        const embeddedWallet = await getEmbeddedWalletFromPrivy(privyUser, getCrossAppAccounts)
+        if (!embeddedWallet) {
+          console.warn('[usePowerups] no embedded wallet found from Privy')
+          setEmbeddedSigner(null)
+          return
+        }
+
+        // Create a viem wallet client from the embedded wallet provider
+        const walletClient = await createMonadWalletClient(embeddedWallet)
+
+        // Quick-check: can we read balance?
+        try {
+          const bal = await walletClient.getBalance({ address: monadGamesAddress })
+          console.log('[usePowerups] embedded wallet balance:', formatBalance(bal))
+        } catch (e) {
+          console.warn('[usePowerups] embedded wallet exists but balance read failed', e)
+        }
+
+        setEmbeddedSigner({ embeddedWallet, walletClient })
+        console.log('[usePowerups] embedded signer configured for', monadGamesAddress)
+      } catch (err) {
+        console.error('[usePowerups] Failed to setup embedded signer:', err)
+        setEmbeddedSigner(null)
+      }
+    }
+
+    setupEmbeddedSigner()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authenticated, monadGamesAddress, privyUser, getCrossAppAccounts])
 
   // Process owned powerups
   useEffect(() => {
@@ -31,7 +89,7 @@ export const usePowerups = () => {
         tokenId: Number(tokenId),
         type: getPowerupTypeFromId(Number(tokenId)),
         index,
-        isUsed: false // This would need to be tracked in the contract
+        isUsed: false
       }))
       setOwnedPowerups(powerups)
     } else {
@@ -39,25 +97,22 @@ export const usePowerups = () => {
     }
   }, [contractPowerups])
 
-  // Get powerup type from token ID (this depends on your contract implementation)
+  // Helper: derive powerup type (adjust if your NFT encoding differs)
   const getPowerupTypeFromId = (tokenId) => {
-    // Simple mapping - adjust based on your contract logic
     const types = Object.keys(POWERUP_TYPES)
     return types[tokenId % types.length]
   }
 
-  // Get powerup prices (in ETH/MON)
+  // Prices (MON)
   const getPowerupPrices = () => ({
-    SPEED_BOOST: '0.01',
+    SPEED: '0.01',
     SHIELD: '0.015',
     DOUBLE_JUMP: '0.02',
-    SCORE_MULTIPLIER: '0.025'
+    MULTIPLIER: '0.025'
   })
 
-  // Get powerup shop data
   const getShopData = useCallback(() => {
     const prices = getPowerupPrices()
-    
     return Object.entries(POWERUP_TYPES).map(([type, config]) => ({
       type,
       name: type.replace('_', ' '),
@@ -71,32 +126,30 @@ export const usePowerups = () => {
     }))
   }, [ownedPowerups])
 
-  // Get powerup descriptions
   const getPowerupDescription = (type) => {
     const descriptions = {
-      SPEED_BOOST: 'Increases running speed by 50% for 5 seconds',
+      SPEED: 'Increases running speed by 50% for 5 seconds',
       SHIELD: 'Protects from one obstacle collision for 10 seconds',
       DOUBLE_JUMP: 'Allows double jumping for 15 seconds',
-      SCORE_MULTIPLIER: 'Doubles score gain for 8 seconds'
+      MULTIPLIER: 'Doubles score gain for 8 seconds'
     }
     return descriptions[type] || 'Mystery powerup'
   }
 
-  // Get powerup icons
   const getPowerupIcon = (type) => {
     const icons = {
-      SPEED_BOOST: '⚡',
+      SPEED: '⚡',
       SHIELD: '🛡️',
       DOUBLE_JUMP: '🦘',
-      SCORE_MULTIPLIER: '✨'
+      MULTIPLIER: '✨'
     }
     return icons[type] || '🎮'
   }
 
-  // Mint powerup NFT
+  // BUY: Use embedded wallet client to call contract directly (no injected wallet)
   const buyPowerup = useCallback(async (powerupType) => {
-    if (!isConnected || !address) {
-      toast.error('Please connect your wallet first')
+    if (!monadConnected || !monadGamesAddress) {
+      toast.error('Please connect with MonadGames ID first')
       return false
     }
 
@@ -107,121 +160,134 @@ export const usePowerups = () => {
 
     const prices = getPowerupPrices()
     const price = prices[powerupType]
-    
     if (!price) {
       toast.error('Invalid powerup type')
       return false
     }
 
+    if (!embeddedSigner || !embeddedSigner.walletClient) {
+      toast.error('MonadGames embedded wallet not available for signing transactions')
+      console.warn('[usePowerups] buyPowerup aborted: no embeddedSigner', { embeddedSigner })
+      return false
+    }
+
+    const powerupTypeMapping = {
+      'SPEED': 0,
+      'SHIELD': 1,
+      'DOUBLE_JUMP': 2,
+      'MULTIPLIER': 3
+    }
+
+    const powerupTypeId = powerupTypeMapping[powerupType]
+    if (powerupTypeId === undefined) {
+      toast.error('Invalid powerup mapping')
+      return false
+    }
+
     try {
       setIsMinting(true)
-      
-      toast.loading('Minting powerup NFT...', {
-        id: 'mint-powerup'
-      })
+      toast.loading('Purchasing powerup with MonadGames ID wallet...', { id: 'mint-powerup' })
 
-      const powerupTypeId = Object.keys(POWERUP_TYPES).indexOf(powerupType)
-      const params = buildMintPowerupParams(powerupTypeId, parseEther(price))
+      // parse price to BigInt (viem's parseEther returns bigint)
+      const value = parseEther(price) // bigint
 
-      await mintPowerup({
+      // OPTIONAL: check balance first
+      try {
+        const hasBalance = await checkBalance(embeddedSigner.walletClient, monadGamesAddress, value)
+        if (!hasBalance) {
+          const bal = await embeddedSigner.walletClient.getBalance({ address: monadGamesAddress }).catch(()=>0n)
+          toast.error(`Insufficient MON. Balance: ${formatBalance(bal)} MON. Need ${price} MON.` , { id: 'mint-powerup' })
+          setIsMinting(false)
+          return false
+        }
+      } catch (balErr) {
+        console.warn('[usePowerups] balance check failed', balErr)
+        // continue and let the transaction fail if needed
+      }
+
+      // Estimate gas (optional)
+      let gasLimit = 120000n
+      try {
+        gasLimit = await estimateGasForMint(embeddedSigner.walletClient, CONTRACT_ADDRESSES.POWERUP_NFT, POWERUP_NFT_ABI, powerupTypeId, value)
+      } catch (e) {
+        console.warn('[usePowerups] gas estimate failed', e)
+      }
+
+      // Perform the write using the embedded wallet client (viem)
+      // NOTE: walletClient.writeContract typically expects args as primitives/BigInt
+      const tx = await embeddedSigner.walletClient.writeContract({
         address: CONTRACT_ADDRESSES.POWERUP_NFT,
         abi: POWERUP_NFT_ABI,
         functionName: 'mintPowerup',
-        ...params,
+        args: [BigInt(powerupTypeId)],
+        value: BigInt(value),
+        // some viem providers accept a gas limit override as 'gas' or 'gasLimit'
+        // gas: gasLimit
       })
 
-      toast.success(`${powerupType.replace('_', ' ')} NFT minted!`, {
-        id: 'mint-powerup',
-        icon: getPowerupIcon(powerupType),
-        duration: 4000
-      })
+      console.log('[usePowerups] mint tx sent via embedded wallet:', tx)
+      toast.success(`${powerupType.replace('_', ' ')} NFT purchased with MonadGames ID!`, { id: 'mint-powerup', duration: 4000 })
 
-      // Refresh powerups after a delay
+      // refetch owned powerups after a short delay to let chain indexer run
       setTimeout(() => {
         refetchPowerups()
-      }, 2000)
+      }, 3000)
 
       return true
     } catch (error) {
-      console.error('Failed to mint powerup:', error)
-      
-      let errorMessage = 'Failed to mint powerup'
-      if (error.message?.includes('insufficient funds')) {
-        errorMessage = 'Insufficient funds for this powerup'
-      } else if (error.message?.includes('user rejected')) {
+      console.error('[usePowerups] Failed to mint powerup with embedded wallet:', error)
+      let errorMessage = 'Failed to purchase powerup'
+      if (String(error).includes('insufficient funds')) {
+        errorMessage = `Insufficient MON in your MonadGames ID wallet. Need ${price} MON.`
+      } else if (String(error).toLowerCase().includes('user rejected')) {
         errorMessage = 'Transaction cancelled'
       }
-      
-      toast.error(errorMessage, {
-        id: 'mint-powerup'
-      })
+      toast.error(errorMessage, { id: 'mint-powerup' })
       return false
     } finally {
       setIsMinting(false)
     }
-  }, [isConnected, address, mintPowerup, refetchPowerups])
+  }, [monadConnected, monadGamesAddress, embeddedSigner, refetchPowerups])
 
-  // Use powerup (this would be called during gameplay)
+  // Activate powerup (this can still use contract writes if you want; we attempt embedded client too)
   const activatePowerup = useCallback(async (tokenId) => {
-    if (!isConnected || !address) {
-      toast.error('Please connect your wallet first')
+    if (!monadConnected || !monadGamesAddress) {
+      toast.error('Please connect MonadGames ID first')
+      return false
+    }
+    if (!embeddedSigner || !embeddedSigner.walletClient) {
+      toast.error('MonadGames embedded wallet not available')
       return false
     }
 
     try {
-      toast.loading('Activating powerup...', {
-        id: 'use-powerup'
-      })
-
-      await usePowerup({
+      toast.loading('Activating powerup...', { id: 'use-powerup' })
+      await embeddedSigner.walletClient.writeContract({
         address: CONTRACT_ADDRESSES.POWERUP_NFT,
         abi: POWERUP_NFT_ABI,
         functionName: 'usePowerup',
         args: [BigInt(tokenId)],
-        gas: 50000n,
       })
-
-      toast.success('Powerup activated!', {
-        id: 'use-powerup',
-        icon: '⚡',
-        duration: 3000
-      })
-
-      // Refresh powerups
+      toast.success('Powerup activated!', { id: 'use-powerup' })
       refetchPowerups()
-      
       return true
-    } catch (error) {
-      console.error('Failed to use powerup:', error)
-      toast.error('Failed to activate powerup', {
-        id: 'use-powerup'
-      })
+    } catch (err) {
+      console.error('Failed to use powerup:', err)
+      toast.error('Failed to activate powerup', { id: 'use-powerup' })
       return false
     }
-  }, [isConnected, address, usePowerup, refetchPowerups])
+  }, [monadConnected, monadGamesAddress, embeddedSigner, refetchPowerups])
 
-  // Get powerup stats
   const getPowerupStats = useCallback(() => {
-    const stats = {
-      total: ownedPowerups.length,
-      byType: {},
-      totalValue: 0
-    }
-
+    const stats = { total: ownedPowerups.length, byType: {}, totalValue: 0 }
     const prices = getPowerupPrices()
-
     ownedPowerups.forEach(powerup => {
-      if (!stats.byType[powerup.type]) {
-        stats.byType[powerup.type] = 0
-      }
-      stats.byType[powerup.type]++
+      stats.byType[powerup.type] = (stats.byType[powerup.type] || 0) + 1
       stats.totalValue += parseFloat(prices[powerup.type] || '0')
     })
-
     return stats
   }, [ownedPowerups])
 
-  // Check if user can afford powerup
   const canAfford = useCallback((powerupType, userBalance) => {
     const prices = getPowerupPrices()
     const price = parseFloat(prices[powerupType] || '0')
@@ -229,75 +295,36 @@ export const usePowerups = () => {
     return balance >= price
   }, [])
 
-  // Get recommended powerups based on user's gameplay
   const getRecommendedPowerups = useCallback((gameStats) => {
     const recommendations = []
-    
     if (!gameStats) return recommendations
-
-    // Recommend based on gameplay patterns
-    if (gameStats.averageScore < 1000) {
-      recommendations.push({
-        type: 'SHIELD',
-        reason: 'Protect yourself from obstacles while learning'
-      })
-    }
-    
-    if (gameStats.averageDistance > 5000) {
-      recommendations.push({
-        type: 'SCORE_MULTIPLIER',
-        reason: 'Boost your high scores even further'
-      })
-    }
-    
-    if (gameStats.jumpAccuracy < 0.8) {
-      recommendations.push({
-        type: 'DOUBLE_JUMP',
-        reason: 'Give yourself more jumping options'
-      })
-    }
-    
-    recommendations.push({
-      type: 'SPEED_BOOST',
-      reason: 'Essential for high-speed gameplay'
-    })
-
+    if (gameStats.averageScore < 1000) recommendations.push({ type: 'SHIELD', reason: 'Protect yourself from obstacles while learning' })
+    if (gameStats.averageDistance > 5000) recommendations.push({ type: 'MULTIPLIER', reason: 'Boost your high scores' })
+    if (gameStats.jumpAccuracy < 0.8) recommendations.push({ type: 'DOUBLE_JUMP', reason: 'More jumping options' })
+    recommendations.push({ type: 'SPEED', reason: 'Essential for high-speed gameplay' })
     return recommendations
   }, [])
 
   return {
-    // Data
     ownedPowerups,
     shopData: getShopData(),
     powerupStats: getPowerupStats(),
     prices: getPowerupPrices(),
-    
-    // State
     isLoading,
     isMinting,
-    isConnected,
-    
-    // Actions
+    isConnected: monadConnected,
+    address: monadGamesAddress,
     buyPowerup,
     activatePowerup,
     refetchPowerups,
-    
-    // Utils
     canAfford,
     getRecommendedPowerups,
     getPowerupDescription,
     getPowerupIcon,
-    
-    // Helpers
     formatPrice: (price) => `${price} MON`,
     getPowerupsByType: (type) => ownedPowerups.filter(p => p.type === type),
     hasAnyPowerups: ownedPowerups.length > 0,
-    getMostOwnedPowerup: () => {
-      const counts = {}
-      ownedPowerups.forEach(p => {
-        counts[p.type] = (counts[p.type] || 0) + 1
-      })
-      return Object.entries(counts).sort(([,a], [,b]) => b - a)[0]?.[0] || null
-    }
   }
 }
+
+export default usePowerups

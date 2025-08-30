@@ -239,3 +239,5 @@ export const useGameLogic = () => {
     isMenu: gameState === 'menu',
   }
 }
+
+export default useGameLogic

@@ -68,6 +68,9 @@ export class GameEngine {
     this.onScoreUpdate = null
     this.onGameOver = null
     this.onPowerupCollect = null
+
+    // small safeguard to avoid too-frequent spawns (ms)
+    this._lastObstacleSpawnAt = 0
   }
 
   setupEventListeners() {
@@ -144,6 +147,8 @@ export class GameEngine {
     
     
     this.particleSystem.clear()
+
+    this._lastObstacleSpawnAt = 0
   }
 
   gameLoop(currentTime = 0) {
@@ -175,7 +180,7 @@ export class GameEngine {
     
    
     this.distance += this.gameSpeed
-    
+   
    
     this.score += SCORING.BASE_SCORE_PER_SECOND * this.scoreMultiplier * (this.gameSpeed / 60)
     
@@ -296,24 +301,38 @@ export class GameEngine {
   spawnObstacles() {
     const phase = this.getCurrentPhase()
     
-    
-    const base = 1
-    const extra = Math.floor(this.score / 800) 
-    const clusterSize = Math.min(4, base + extra) 
-    const spacing = 60 
+    // Always spawn a single obstacle (no clusters)
+    const clusterSize = 1
 
+    // Minimum pixel gap from any recently-spawned obstacle to the spawn edge to avoid back-to-back spawns
+    const minGapFromSpawn = 220
+
+    // throttle via time too (avoid spamming spawns multiple times in one second)
+    const now = performance.now ? performance.now() : Date.now()
+    const minSpawnIntervalMs = 400 // do not spawn more often than this
+
+    // If an obstacle is still within minGapFromSpawn of the right edge, skip spawn
+    const nearSpawn = this.obstacles.some(o => o.x > GAME_CONFIG.CANVAS_WIDTH - minGapFromSpawn)
+    if (nearSpawn) {
+      return
+    }
+
+    if (now - this._lastObstacleSpawnAt < minSpawnIntervalMs) {
+      return
+    }
+
+    // Use phase frequency for spawn chance
     if (Math.random() < phase.obstacleFreq) {
       const obstacleTypes = Object.keys(OBSTACLE_TYPES)
       const type = obstacleTypes.length ? obstacleTypes[0] : null
       if (!type) return
       const config = OBSTACLE_TYPES[type]
 
-     
+      // Spawn single obstacle with a small vertical variance
       for (let i = 0; i < clusterSize; i++) {
-        
         const yVariance = (Math.random() - 0.5) * 10
         const obstacle = {
-          x: GAME_CONFIG.CANVAS_WIDTH + i * (config.width + spacing),
+          x: GAME_CONFIG.CANVAS_WIDTH + i * (config.width + 60),
           y: GAME_CONFIG.CANVAS_HEIGHT - 100 - config.height + yVariance,
           width: config.width,
           height: config.height,
@@ -324,6 +343,8 @@ export class GameEngine {
         
         this.obstacles.push(obstacle)
       }
+
+      this._lastObstacleSpawnAt = now
     }
   }
 
@@ -367,19 +388,23 @@ export class GameEngine {
       height: this.player.height
     }
     
-    // Check obstacle collisions
-    this.obstacles.forEach((obstacle, index) => {
+    // Check obstacle collisions - break after first collision to avoid multiple processing in same frame
+    for (let i = 0; i < this.obstacles.length; i++) {
+      const obstacle = this.obstacles[i]
       if (this.isColliding(playerRect, obstacle)) {
-        this.handleObstacleCollision(obstacle, index)
+        this.handleObstacleCollision(obstacle, i)
+        // stop after first handled collision to avoid double-damage in same frame
+        break
       }
-    })
+    }
     
-    // Check powerup collisions
-    this.powerups.forEach((powerup, index) => {
+    // Check powerup collisions (allow multiple)
+    for (let i = this.powerups.length - 1; i >= 0; i--) {
+      const powerup = this.powerups[i]
       if (this.isColliding(playerRect, powerup)) {
-        this.handlePowerupCollision(powerup, index)
+        this.handlePowerupCollision(powerup, i)
       }
-    })
+    }
   }
 
   isColliding(rect1, rect2) {
@@ -391,18 +416,25 @@ export class GameEngine {
 
   handleObstacleCollision(obstacle, index) {
     if (this.hasShield) {
-      // Shield blocks damage
+      // Shield blocks damage: consume shield and remove effect (use uppercase key to match POWERUP_TYPES)
       this.hasShield = false
-      // Safe removal (guarded)
-      this.removePowerupEffect('shield')
-    } else {
-      this.player.health -= obstacle.damage
-      if (this.player.health <= 0) {
-        this.gameOver()
-        return
-      }
+      this.removePowerupEffect('SHIELD') // ensure key matches POWERUP_TYPES
+      // Remove obstacle and create explosion effect (no health deduction)
+      this.obstacles.splice(index, 1)
+      this.particleSystem.addParticle(obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2, 'explosion')
+      return
     }
-    
+
+    // No shield: take damage
+    this.player.health -= obstacle.damage
+    if (this.player.health <= 0) {
+      // Remove obstacle and trigger game over
+      this.obstacles.splice(index, 1)
+      this.particleSystem.addParticle(obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2, 'explosion')
+      this.gameOver()
+      return
+    }
+
     // Remove obstacle and create explosion effect
     this.obstacles.splice(index, 1)
     this.particleSystem.addParticle(obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2, 'explosion')
@@ -428,14 +460,14 @@ export class GameEngine {
     
     this.activePowerups = this.activePowerups.filter(p => p.type !== type)
 
-// Add new powerup (ensure timeLeft is in ms)
-const durationMs = (config.duration && config.duration > 1000) ? config.duration : (config.duration * 1000)
+    // Add new powerup (ensure timeLeft is in ms)
+    const durationMs = (config.duration && config.duration > 1000) ? config.duration : (config.duration * 1000)
 
-this.activePowerups.push({
-  type,
-  timeLeft: durationMs,
-  config
-})
+    this.activePowerups.push({
+      type,
+      timeLeft: durationMs,
+      config
+    })
 
     
     switch (config.effect) {
@@ -464,12 +496,15 @@ this.activePowerups.push({
           this.speedMultiplier = 1
           return
         case 'shield':
+        case 'SHIELD':
           this.hasShield = false
           return
         case 'double_jump':
+        case 'DOUBLE_JUMP':
           this.hasDoubleJump = false
           return
         case 'multiplier':
+        case 'MULTIPLIER':
           this.scoreMultiplier = 1
           return
         default:

@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShoppingCart, Zap, Shield, Crown, Star, Wallet, Info, Clock } from 'lucide-react'
+import { ShoppingCart, Zap, Shield, Crown, Star, Wallet, Info, Clock, AlertCircle } from 'lucide-react'
 import { usePowerups } from '../../hooks/usePowerups'
 import { useMonadGames } from '../../hooks/useMonadGames'
+import toast from 'react-hot-toast' // <- missing import fixed
 
 const PowerupShop = () => {
   const {
@@ -18,7 +19,14 @@ const PowerupShop = () => {
     getPowerupIcon
   } = usePowerups()
 
-  const { isConnected, user } = useMonadGames()
+  // Use MonadGames connection state instead of generic wallet
+  const { 
+    isConnected: monadConnected, 
+    user: monadUser, 
+    monadGamesAddress,
+    connectMonadGamesID 
+  } = useMonadGames()
+  
   const [selectedPowerup, setSelectedPowerup] = useState(null)
   const [selectedTab, setSelectedTab] = useState('shop') // shop, inventory, stats
 
@@ -29,10 +37,20 @@ const PowerupShop = () => {
   ]
 
   const handleBuyPowerup = async (powerupType) => {
-    const success = await buyPowerup(powerupType)
-    if (success) {
-      // Show success animation or feedback
-      console.log(`Successfully purchased ${powerupType}`)
+    if (!monadConnected) {
+      toast.error('Please connect with MonadGames ID first')
+      return
+    }
+
+    try {
+      const success = await buyPowerup(powerupType)
+      if (success) {
+        toast.success(`${powerupType.replace('_',' ')} purchased!`)
+        console.log(`Successfully purchased ${powerupType} with MonadGames ID wallet`)
+      }
+    } catch (err) {
+      console.error('handleBuyPowerup error', err)
+      toast.error('Purchase failed')
     }
   }
 
@@ -103,12 +121,12 @@ const PowerupShop = () => {
             handleBuyPowerup(powerup.type)
           }
         }}
-        disabled={!isConnected || isMinting || isOwned}
+        disabled={!monadConnected || isMinting || isOwned}
         className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 ${
           isOwned
             ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-            : !isConnected
-            ? 'bg-gray-700 text-gray-400'
+            : !monadConnected
+            ? 'bg-blue-600 hover:bg-blue-500 text-white'
             : 'bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-500 hover:to-blue-500 text-white'
         }`}
       >
@@ -120,19 +138,19 @@ const PowerupShop = () => {
             >
               <Zap size={16} />
             </motion.div>
-            <span>Minting...</span>
+            <span>Purchasing...</span>
           </>
         ) : isOwned ? (
           <span>Owned</span>
-        ) : !isConnected ? (
+        ) : !monadConnected ? (
           <>
             <Wallet size={16} />
-            <span>Connect Wallet</span>
+            <span>Connect MonadGames ID</span>
           </>
         ) : (
           <>
             <ShoppingCart size={16} />
-            <span>Buy NFT</span>
+            <span>Buy with MonadGames ID</span>
           </>
         )}
       </motion.button>
@@ -277,9 +295,29 @@ const PowerupShop = () => {
           Powerup NFT Shop
         </h1>
         <p className="text-gray-400 mb-6">
-          Purchase permanent powerup NFTs to enhance your gameplay
+          Purchase permanent powerup NFTs with your MonadGames ID wallet
         </p>
       </motion.div>
+
+      {/* MonadGames Connection Status */}
+      {monadConnected && monadGamesAddress && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center"
+        >
+          <div className="flex items-center justify-center space-x-2 text-green-400">
+            <Wallet size={16} />
+            <span className="font-medium">MonadGames ID Connected</span>
+          </div>
+          <p className="text-green-300 text-sm mt-1">
+            Wallet: {monadGamesAddress ? `${monadGamesAddress.slice(0,6)}...${monadGamesAddress.slice(-4)}` : '—'}
+          </p>
+          <p className="text-gray-400 text-xs mt-2">
+            NFT purchases will be charged directly from your MonadGames ID wallet
+          </p>
+        </motion.div>
+      )}
 
       {/* Tabs */}
       <motion.div
@@ -322,9 +360,10 @@ const PowerupShop = () => {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-white">Available Powerups</h2>
-                {isConnected && (
-                  <div className="text-green-400">
-                    Wallet Connected ✅
+                {monadConnected && (
+                  <div className="text-green-400 flex items-center space-x-2">
+                    <Wallet size={16} />
+                    <span>MonadGames ID Ready</span>
                   </div>
                 )}
               </div>
@@ -332,6 +371,24 @@ const PowerupShop = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {shopData.map(powerup => renderPowerupCard(powerup))}
               </div>
+
+              {/* Information about seamless purchases */}
+              {monadConnected && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4"
+                >
+                  <div className="flex items-center space-x-2 text-blue-400 mb-2">
+                    <Info size={16} />
+                    <span className="font-medium">Seamless Purchasing</span>
+                  </div>
+                  <p className="text-gray-400 text-sm">
+                    Your purchases will be automatically charged from your connected MonadGames ID wallet. 
+                    No additional wallet popups required!
+                  </p>
+                </motion.div>
+              )}
             </div>
           )}
 
@@ -340,8 +397,8 @@ const PowerupShop = () => {
         </motion.div>
       </AnimatePresence>
 
-      {/* Connection prompt */}
-      {!isConnected && selectedTab === 'shop' && (
+      {/* MonadGames ID Connection prompt */}
+      {!monadConnected && selectedTab === 'shop' && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -349,11 +406,20 @@ const PowerupShop = () => {
         >
           <Wallet className="text-blue-400 w-16 h-16 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-blue-400 mb-4">
-            Connect Your Wallet
+            Connect MonadGames ID
           </h3>
           <p className="text-gray-400 mb-6">
-            Connect your wallet to purchase and manage your powerup NFTs
+            Connect your MonadGames ID to purchase and manage your powerup NFTs
           </p>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={connectMonadGamesID}
+            className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-500 hover:to-green-500 text-white px-8 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center space-x-2 mx-auto"
+          >
+            <Wallet size={16} />
+            <span>Sign in with MonadGames ID</span>
+          </motion.button>
         </motion.div>
       )}
 
@@ -419,10 +485,10 @@ const PowerupShop = () => {
                 </button>
                 <button
                   onClick={() => handleBuyPowerup(selectedPowerup.type)}
-                  disabled={!isConnected || isMinting}
+                  disabled={!monadConnected || isMinting}
                   className="flex-1 py-3 px-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-500 hover:to-blue-500 text-white rounded-lg font-semibold disabled:opacity-50 transition-all"
                 >
-                  {isMinting ? 'Minting...' : 'Buy NFT'}
+                  {isMinting ? 'Purchasing...' : monadConnected ? 'Buy with MonadGames ID' : 'Connect First'}
                 </button>
               </div>
             </motion.div>

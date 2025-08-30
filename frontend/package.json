@@ -13,6 +13,7 @@
     "@privy-io/react-auth": "^1.79.0",
     "@privy-io/wagmi": "^0.2.12",
     "@tanstack/react-query": "^5.85.5",
+    "@wagmi/connectors": "^5.9.9",
     "buffer": "^6.0.3",
     "framer-motion": "^11.3.24",
     "lucide-react": "^0.263.1",

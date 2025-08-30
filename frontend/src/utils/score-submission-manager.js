@@ -107,18 +107,23 @@ export class ScoreSubmissionManager {
       // Server-relay path
       if (USE_SERVER_RELAY) {
         console.log(`[${this.name}] Using server-relay: POST ${API_BASE}/api/submit-score`);
+
+        // ADDED LOG: show payload that will be posted to backend
+        const payload = {
+          playerAddress: userData?.walletAddress || null,
+          scoreAmount: score,
+          transactionAmount: transactions,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            source: 'neon-runner-frontend'
+          }
+        };
+        console.log(`[${this.name}] server-relay POST body`, { payload, userData });
+
         const resp = await fetch(`${API_BASE}/api/submit-score`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            playerAddress: userData?.walletAddress || null,
-            scoreAmount: score,
-            transactionAmount: transactions,
-            metadata: {
-              timestamp: new Date().toISOString(),
-              source: 'neon-runner-frontend'
-            }
-          })
+          body: JSON.stringify(payload)
         });
 
         const json = await resp.json().catch(() => null);

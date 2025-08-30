@@ -37,7 +37,9 @@ export const useMonadGames = () => {
   // Contract write hooks (retain your existing usage)
   const { writeContract: submitScore } = useWriteContract()
   const { writeContract: setUsernameContract } = useWriteContract()
-  const activeAddressForReads = address || monadGamesAddress || undefined
+
+  // >>> PREFER_MONAD: prefer monadGamesAddress for reads; fallback to injected only if no monadGamesAddress
+  const activeAddressForReads = monadGamesAddress || address || undefined
 
   // Contract read hooks to populate player stats / username
   const { data: contractStats } = useReadContract({
@@ -156,7 +158,8 @@ useEffect(() => {
 
   // Utility: build user object for UI (Navbar/Header expects certain shape)
   const buildDisplayUser = useCallback(() => {
-    const walletAddress = address || monadGamesAddress || null
+    // >>> PREFER_MONAD: prefer monadGamesAddress for display too
+    const walletAddress = monadGamesAddress || address || null
 
     // Prefer MonadGames username, then contract username, then privy user data
     const displayName =
@@ -253,13 +256,15 @@ useEffect(() => {
   // replace existing submitGameScore implementation with this
 const submitGameScore = useCallback(
   async (gameStats) => {
-    const activeAddress = address || monadGamesAddress;
+    // >>> PREFER_MONAD: prefer monadGamesAddress for submission. If monadGamesAddress not present, refuse.
+    const activeAddress = monadGamesAddress || address || null;
     const USE_SERVER_RELAY = import.meta.env.VITE_USE_SERVER_RELAY === 'true';
     const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
     const SUBMIT_SECRET = import.meta.env.VITE_SUBMIT_SECRET || null;
 
-    if (!activeAddress || !authenticated) {
-      toast.error('Please connect your MonadGames ID first');
+    if (!activeAddress || !authenticated || !monadGamesAddress) {
+      // require monadGamesAddress specifically - prevents injected wallet submissions
+      toast.error('Please connect using Monad Games ID (Sign in with Monad Games ID).')
       return false;
     }
 
@@ -281,6 +286,7 @@ const submitGameScore = useCallback(
         toast.loading('Submitting score to server relay...', { id: 'submit-score' });
 
         const body = {
+          // IMPORTANT: use the MONAD address only
           playerAddress: activeAddress,
           scoreAmount: numericScore,
           transactionAmount: 1,
@@ -291,6 +297,17 @@ const submitGameScore = useCallback(
 
         const headers = { 'Content-Type': 'application/json' };
         if (SUBMIT_SECRET) headers['x-submit-secret'] = SUBMIT_SECRET;
+
+        // ADDED LOG: show exactly what we're sending to backend
+        console.log('[useMonadGames] server-relay POST body', {
+          api: `${API_BASE}/api/submit-score`,
+          body,
+          headers,
+          monadGamesAddress,
+          address,
+          monadGamesUser,
+          privyUser
+        });
 
         const resp = await fetch(`${API_BASE}/api/submit-score`, {
           method: 'POST',
@@ -316,7 +333,7 @@ const submitGameScore = useCallback(
         return true;
       }
 
-      // WALLET-FIRST PATH: Send transaction from user's wallet (existing behavior)
+      // WALLET-FIRST PATH: Send transaction from user's wallet (if you ever enable it)
       toast.loading('Submitting score to blockchain...', { id: 'submit-score' });
 
       const params = buildSubmitScoreParams(numericScore, Number(distance || 0), Number(powerupsCollected || 0));
@@ -374,11 +391,11 @@ const submitGameScore = useCallback(
       setIsSubmittingScore(false);
     }
   },
-  [address, monadGamesAddress, authenticated, submitScore, monadGamesUser, username]
+  [monadGamesAddress, address, authenticated, submitScore, monadGamesUser, username]
 );
   const updateUsername = useCallback(
     async (newUsername) => {
-      const activeAddress = address || monadGamesAddress
+      const activeAddress = monadGamesAddress || address
       
       if (!activeAddress || !authenticated) {
         toast.error('Please connect your MonadGames ID first')
@@ -429,12 +446,13 @@ const submitGameScore = useCallback(
         return false
       }
     },
-    [address, monadGamesAddress, authenticated, setUsernameContract]
+    [monadGamesAddress, address, authenticated, setUsernameContract]
   )
     // Expose a small global manager expected by legacy code / submission manager
     useEffect(() => {
       const getUserData = () => ({
         username: monadGamesUser?.username || username || privyUser?.username || null,
+        // >>> PREFER_MONAD: expose monadGamesAddress as primary walletAddress
         walletAddress: monadGamesAddress || address || null,
         isAuthenticated: !!authenticated,
         privyUser: privyUser || null
@@ -461,9 +479,10 @@ const submitGameScore = useCallback(
       // keep the global manager updated for non-React modules that rely on window.monadGamesManager
   useEffect(() => {
     if (typeof window !== 'undefined' && window.monadGamesManager) {
+      // enforce preference for monadGamesAddress
       window.monadGamesManager.username = monadGamesUser?.username || username || null
       window.monadGamesManager.walletAddress = monadGamesAddress || address || null
-      window.monadGamesManager.isAuthenticated = Boolean(authenticated && (address || monadGamesAddress))
+      window.monadGamesManager.isAuthenticated = Boolean(authenticated && !!monadGamesAddress)
       window.monadGamesManager.error = null
     }
   }, [monadGamesUser, monadGamesAddress, username, address, authenticated])
@@ -474,8 +493,9 @@ const submitGameScore = useCallback(
 
   return {
     // status
-    isConnected: Boolean(authenticated && (address || monadGamesAddress)),
-    address: address || monadGamesAddress,
+    // >>> PREFER_MONAD: require monadGames address for "isConnected"
+    isConnected: Boolean(authenticated && !!monadGamesAddress),
+    address: monadGamesAddress || address,
     user: userInfo,
     username,
     playerStats,
@@ -507,7 +527,8 @@ const submitGameScore = useCallback(
     updateUsername,
 
     // utilities
-    canSubmitScore: () => Boolean(authenticated && (address || monadGamesAddress) && CONTRACT_ADDRESSES.NEON_RUNNER_GAME),
+    // require monadGamesAddress specifically for submission
+    canSubmitScore: () => Boolean(authenticated && !!monadGamesAddress && CONTRACT_ADDRESSES.NEON_RUNNER_GAME),
     formatAddress: (addr) => (addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : ''),
     isValidUsername: (name) => name && name.trim().length >= 3 && name.trim().length <= 20,
   }

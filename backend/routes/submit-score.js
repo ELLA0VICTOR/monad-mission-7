@@ -43,6 +43,9 @@ const contract = wallet && MONAD_GAMES_CONTRACT ? new Contract(MONAD_GAMES_CONTR
 // body: { playerAddress, scoreAmount, transactionAmount, metadata }
 router.post('/', async (req, res) => {
   try {
+    // LOG: incoming request details for tracing
+    console.log('[submit-score] incoming', { ip: req.ip, headers: req.headers, body: req.body });
+
     // Optional shared-secret protection
     if (SUBMIT_SECRET) {
       const headerSecret = req.get('x-submit-secret')
@@ -74,6 +77,26 @@ router.post('/', async (req, res) => {
 
     // Convert address to checksum (throws if invalid)
     const player = getAddress(playerAddress)
+
+    // ✅ OPTIONAL: Verify player has a MonadGames username
+    if (process.env.REQUIRE_MONAD_USERNAME === 'true') {
+      try {
+        const checkUrl = `${process.env.MONADGAMES_CHECK_API || 'https://monad-games-id-site.vercel.app/api/check-wallet'}?wallet=${player}`
+        const checkResp = await fetch(checkUrl)
+        if (!checkResp.ok) {
+          console.warn('check-wallet endpoint returned', checkResp.status)
+          return res.status(400).json({ success: false, error: 'failed_username_check' })
+        }
+        const checkJson = await checkResp.json().catch(() => null)
+        if (!checkJson?.hasUsername) {
+          console.warn('player has no MonadGames username', player)
+          return res.status(400).json({ success: false, error: 'player_has_no_monad_username' })
+        }
+      } catch (err) {
+        console.warn('Failed to verify monad username', err)
+        return res.status(500).json({ success: false, error: 'username_check_failed' })
+      }
+    }
 
     // Send transaction
     console.log('Submitting updatePlayerData on-chain for', player, score.toString(), txCount.toString())
