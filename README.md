@@ -1,4 +1,4 @@
-# Monad Neon Runner 🏃‍♂️⚡
+# Monad Neon Runner 🏃
 
 A web3-powered endless runner game built on the **Monad Testnet**, featuring identity via **MonadGames ID** and permanent **Powerup NFTs**.
 
@@ -34,7 +34,7 @@ A web3-powered endless runner game built on the **Monad Testnet**, featuring ide
 
 ---
 
-## ⚡ Deployment Instructions
+##  Deployment Instructions
 
 ### Frontend (Vercel)
 1. Push this repo to GitHub.
@@ -62,7 +62,7 @@ Create a `.env` in both `frontend/` and `backend/`:
 
 ---
 
-## 🚀 How it Works
+##  How it Works
 
 1. Player logs in with **MonadGames ID**.  
 2. They can play the game → scores sync to leaderboard via backend.  
@@ -89,7 +89,7 @@ Currency: MON
 
 ## 👨‍💻 Authors
 
-Built with ❤️ by Victor.
+Built with  by Victor.
 
 
 ## 📌 Notes
